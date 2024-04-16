@@ -1,0 +1,16 @@
+"images" folder contains tissue images and annotations.
+
+Each .np file contains the tissue image and its corresponding annotations,
+The first 3 channels represent the RGB image, 
+The 4th channel is the annotation, each pixel is labeled a number from 0-7.
+
+colour_dict = {
+    0: (0,0,0), # background
+    1: (0,255,255), # invasive tumour
+    2: (0,255,0), # tumour-associated stroma
+    3: (124, 252,0), # in-situ tumour
+    4: (255,165,0), # healthy glands
+    5: (255,0,255), # necrosis not in-situ
+    6: (138,43,226), # inflamed stroma
+    7: (0,0,255), # rest
+}
