@@ -11,13 +11,13 @@ import numpy as np
 import tensorflow as tf
 from detection_inference import (non_max_suppression_by_distance,
                                  process_image_tile_to_detections)
+from efficientnet import keras as efn
 from matplotlib import pyplot as plt
 from shapely.ops import unary_union
 from tensorflow.compat.v1.keras.applications import imagenet_utils
 from tqdm import tqdm
 from write_annotations import write_point_set
 
-from efficientnet import keras as efn
 from segmentation_inference import (prepare_patching,
                                     process_image_tile_to_segmentation)
 # from nms import slide_nms, to_wsd, dist_to_px
