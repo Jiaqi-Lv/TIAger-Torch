@@ -11,7 +11,7 @@ from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from utils import get_det_models, imagenet_normalise, px_to_mm
+from utils import get_det_models, imagenet_normalise, is_l1, px_to_mm
 
 
 def detections_in_tile(image_tile, det_models):
@@ -29,7 +29,7 @@ def detections_in_tile(image_tile, det_models):
     )
 
     predictions = []
-    batch_size = 256
+    batch_size = 128
 
     dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
 
@@ -100,11 +100,20 @@ def detection_process(wsi_name):
     print(f"Processing {wsi_path}")
     seg_out_dir = os.path.join(output_dir, "seg_out/")
     det_out_dir = os.path.join(output_dir, "det_out/")
+    temp_out_dir = os.path.join(output_dir, "temp_out/")
+    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
+    mask = np.load(mask_path)
 
-    tumor_stroma_mask_path = os.path.join(
-        seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy"
-    )
-    tumor_stroma_mask = np.load(tumor_stroma_mask_path)
+    if is_l1(mask):
+        print("L1")
+        input_mask = mask
+    else:
+        print("L2")
+        tumor_stroma_mask_path = os.path.join(
+            seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy"
+        )
+        tumor_stroma_mask = np.load(tumor_stroma_mask_path)
+        input_mask = tumor_stroma_mask
 
     models = get_det_models()
 
@@ -116,7 +125,7 @@ def detection_process(wsi_name):
         patch_size=(1024, 1024),
         resolution=20,
         units="power",
-        input_mask=tumor_stroma_mask,
+        input_mask=input_mask,
     )
     # Each tile of size 1024x1024
     annotations = []
@@ -151,5 +160,5 @@ def detection_process(wsi_name):
 
 
 if __name__ == "__main__":
-    wsi_name = "104S.tif"
+    wsi_name = "244B.tif"
     detection_process(wsi_name)

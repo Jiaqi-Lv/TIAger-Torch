@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from utils import (get_seg_models, get_tumor_bulk, get_tumor_stroma_mask,
-                   imagenet_normalise)
+                   imagenet_normalise, is_l1)
 
 
 def tumor_stroma_segmentation(wsi_path, mask, models):
@@ -32,7 +32,7 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
     tumor_predictions: list[np.ndarray] = []
     stroma_predictions: list[np.ndarray] = []
 
-    batch_size = 4
+    batch_size = 8
     dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
 
     for i, imgs in enumerate(tqdm(dataloader, leave=False)):
@@ -114,7 +114,13 @@ def tumor_stroma_process(wsi_name):
 
     wsi_path = os.path.join(wsi_dir, wsi_name)
     wsi_without_ext = os.path.splitext(wsi_name)[0]
-    print(f"Processing {wsi_path}")
+
+    seg_result_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy")
+    if os.path.isfile(seg_result_path):
+        print(f"{wsi_without_ext} already processed")
+        return 1
+
+    print(f"Processing {wsi_without_ext}")
     # Generate tissue mask
     print("Generating tissue mask")
     mask = get_mask(
@@ -123,19 +129,24 @@ def tumor_stroma_process(wsi_name):
         model_weight="/home/u1910100/GitHub/tissue_masker_lite/tissue_masker_lite/model_weights/model_22.pth",
     )
 
-    models = get_seg_models()
-    print("Running tissue segmentation")
-    tumor_stroma_segmentation(wsi_path, mask, models)
+    if is_l1(mask):
+        print(f"{wsi_without_ext} is L1")
+        return 1
+    else:
+        models = get_seg_models()
+        print("Running tissue segmentation")
+        tumor_stroma_segmentation(wsi_path, mask, models)
 
-    # Generate tumor bulk
-    print("Generating bulk tumor stroma")
-    generate_bulk_tumor_stroma(wsi_without_ext)
+        # Generate tumor bulk
+        print("Generating bulk tumor stroma")
+        generate_bulk_tumor_stroma(wsi_without_ext)
 
-    print("Tumor stroma mask saved")
+        print("Tumor stroma mask saved")
+        return 1
 
 
 if __name__ == "__main__":
-    # wsi_name = "104S.tif"
+    # wsi_name = "108S.tif"
     wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
     with Pool(2) as p:
         p.map(tumor_stroma_process, wsi_name_list)

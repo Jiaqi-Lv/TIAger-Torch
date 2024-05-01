@@ -9,7 +9,7 @@ import skimage
 import torch
 from shapely import Point, Polygon
 from tiatoolbox.annotation.storage import Annotation, SQLiteStore
-from tiatoolbox.wsicore.wsireader import WSIReader
+from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
 
 
 def mm2_to_px(mm2, mpp):
@@ -153,17 +153,19 @@ def get_points_within_box(annotation_store, box):
     return results
 
 
-def get_mask_area(mask_path):
-    """Get the size of a mask in pixels where the mask is 1."""
+def get_mask_area(mask):
+    """
+    Get the size of a mask in pixels where the mask is 1.
+    Mask resolution = 32 mpp
+    """
 
-    mask = np.load(mask_path)
     counts = np.count_nonzero(mask)
     down = 6
     area = counts * down**2
     return area
 
 
-def create_til_score(wsi_path, cell_points_path, tumor_stroma_mask_path):
+def create_til_score(wsi_path, cell_points_path, mask):
     cell_points_format = os.path.splitext(cell_points_path)[1]
     if cell_points_format == ".json":
         with open(cell_points_path, "r") as fp:
@@ -180,7 +182,7 @@ def create_til_score(wsi_path, cell_points_path, tumor_stroma_mask_path):
     til_area = dist_to_px(4, 0.5) ** 2
     tils_area = cell_counts * til_area
 
-    stroma_area = get_mask_area(tumor_stroma_mask_path)
+    stroma_area = get_mask_area(mask)
     # print(f"stroma area = {stroma_area}")
     tilscore = int((100 / int(stroma_area)) * int(tils_area))
     tilscore = min(100, tilscore)
@@ -294,3 +296,8 @@ def get_tumor_stroma_mask(bulk_tumor_mask, stroma_mask):
     # plt.imshow(tumor_stroma_mask)
     # plt.show()
     return tumor_stroma_mask
+
+
+def is_l1(mask):
+    count = np.count_nonzero(mask)
+    return count < 50000
