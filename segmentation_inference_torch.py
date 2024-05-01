@@ -32,7 +32,7 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
     tumor_predictions: list[np.ndarray] = []
     stroma_predictions: list[np.ndarray] = []
 
-    batch_size = 8
+    batch_size = 16
     dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
 
     for i, imgs in enumerate(tqdm(dataloader, leave=False)):
@@ -148,7 +148,9 @@ def tumor_stroma_process(wsi_name):
 if __name__ == "__main__":
     # wsi_name = "108S.tif"
     wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
-    with Pool(2) as p:
-        p.map(tumor_stroma_process, wsi_name_list)
+    for wsi_name in tqdm(wsi_name_list):
+        tumor_stroma_process(wsi_name)
+    # with Pool(2) as p:
+    #     p.map(tumor_stroma_process, wsi_name_list)
 
     # tumor_stroma_process(wsi_name)

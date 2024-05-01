@@ -165,5 +165,6 @@ if __name__ == "__main__":
     # detection_process(wsi_name)
 
     wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
-    with Pool(2) as p:
-        p.map(detection_process, wsi_name_list)
+    for wsi_name in tqdm(wsi_name_list, leave=True):
+        detection_process(wsi_name=wsi_name)
+
