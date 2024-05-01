@@ -1,5 +1,6 @@
 import json
 import os
+from multiprocessing import Pool
 
 import numpy as np
 import skimage
@@ -160,5 +161,9 @@ def detection_process(wsi_name):
 
 
 if __name__ == "__main__":
-    wsi_name = "244B.tif"
-    detection_process(wsi_name)
+    # wsi_name = "244B.tif"
+    # detection_process(wsi_name)
+
+    wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
+    with Pool(2) as p:
+        p.map(detection_process, wsi_name_list)

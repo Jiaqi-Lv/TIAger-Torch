@@ -41,6 +41,10 @@ def til_score_process(wsi_name):
 
 
 if __name__ == "__main__":
-    wsi_name = "104S.tif"
-    score = til_score_process(wsi_name)
-    print(score)
+    # wsi_name = "104S.tif"
+    # score = til_score_process(wsi_name)
+    # print(score)
+
+    wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
+    with Pool(2) as p:
+        p.map(til_score_process, wsi_name_list)
