@@ -1,22 +1,27 @@
 import os
-from multiprocessing import Pool
-
 import numpy as np
 import torch
 from tiatoolbox.models.engine.semantic_segmentor import SemanticSegmentor
 from tiatoolbox.tools.patchextraction import get_patch_extractor
-from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
-from tissue_masker_lite import get_mask
+from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader, TIFFWSIReader
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from utils import (get_seg_models, get_tumor_bulk, get_tumor_stroma_mask,
-                   imagenet_normalise, is_l1)
+from utils import (get_seg_models, get_tumor_bulk, get_tumor_stroma_mask, is_l1, imagenet_normalise)
+
+
+
+output_dir = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/output"
+wsi_dir = "/home/u1910100/lab-private/it-services/TiGER/new_data/wsitils/images/"
+temp_out_dir = os.path.join(output_dir, "temp_out/")
+seg_out_dir = os.path.join(output_dir, "seg_out/")
+det_out_dir = os.path.join(output_dir, "det_out/")
 
 
 def tumor_stroma_segmentation(wsi_path, mask, models):
     wsi_without_ext = os.path.splitext(os.path.basename(wsi_path))[0]
-    image = WSIReader.open(wsi_path)
+    print(wsi_path)
+    image = TIFFWSIReader.open(wsi_path)
     dimensions = image.slide_dimensions(resolution=10, units="power")
 
     patch_extractor = get_patch_extractor(
@@ -66,7 +71,8 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
         patch_extractor.coordinate_list,
     )
     tumor_mask = (tumor_mask > 0.5).astype(np.uint8)
-    np.save(f"output/seg_out/{wsi_without_ext}_tumor.npy", tumor_mask)
+    out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor.npy")
+    np.save(out_path, tumor_mask)
 
     stroma_mask = SemanticSegmentor.merge_prediction(
         (dimensions[1], dimensions[0]),
@@ -74,16 +80,15 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
         patch_extractor.coordinate_list,
     )
     stroma_mask = (stroma_mask > 0.5).astype(np.uint8)
-    np.save(f"output/seg_out/{wsi_without_ext}_stroma.npy", stroma_mask)
+    out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_stroma.npy")
+    np.save(out_path, stroma_mask)
 
     print(f"{wsi_without_ext} tumor stroma segmentation complete")
 
 
 def generate_bulk_tumor_stroma(wsi_without_ext):
-    tumor_mask_path = (
-        f"/home/u1910100/GitHub/TIAger-Torch/output/seg_out/{wsi_without_ext}_tumor.npy"
-    )
-    stroma_mask_path = f"/home/u1910100/GitHub/TIAger-Torch/output/seg_out/{wsi_without_ext}_stroma.npy"
+    tumor_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor.npy")
+    stroma_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_stroma.npy")
     tumor_mask = np.load(tumor_mask_path)[:, :, 0]
     tumor_mask = VirtualWSIReader.open(tumor_mask, power=10, mode="bool")
     tumor_mask_thumb = tumor_mask.slide_thumbnail(resolution=0.3125, units="power")
@@ -97,16 +102,12 @@ def generate_bulk_tumor_stroma(wsi_without_ext):
 
     tumor_stroma_mask = get_tumor_stroma_mask(tumor_bulk, binary_stroma_mask)
     tumor_stroma_mask = tumor_stroma_mask.astype(np.uint8)
-    np.save(f"output/seg_out/{wsi_without_ext}_tumor_stroma.npy", tumor_stroma_mask)
+    out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy")
+    np.save(out_path, tumor_stroma_mask)
 
 
 def tumor_stroma_process(wsi_name):
-    output_dir = "output/"
-    wsi_dir = "/home/u1910100/Documents/Tiger_Data/wsitils/images"
-
-    temp_out_dir = os.path.join(output_dir, "temp_out/")
-    seg_out_dir = os.path.join(output_dir, "seg_out/")
-    det_out_dir = os.path.join(output_dir, "det_out/")
+    
     if not os.path.exists(seg_out_dir):
         os.makedirs(seg_out_dir)
     if not os.path.exists(det_out_dir):
@@ -115,19 +116,16 @@ def tumor_stroma_process(wsi_name):
     wsi_path = os.path.join(wsi_dir, wsi_name)
     wsi_without_ext = os.path.splitext(wsi_name)[0]
 
+    print(f"Processing {wsi_without_ext}")
+
     seg_result_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy")
     if os.path.isfile(seg_result_path):
         print(f"{wsi_without_ext} already processed")
         return 1
-
-    print(f"Processing {wsi_without_ext}")
-    # Generate tissue mask
-    print("Generating tissue mask")
-    mask = get_mask(
-        wsi_path=wsi_path,
-        save_dir=temp_out_dir,
-        model_weight="/home/u1910100/GitHub/tissue_masker_lite/tissue_masker_lite/model_weights/model_22.pth",
-    )
+    
+    print("Loading tissue mask")
+    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
+    mask = np.load(mask_path)[:,:,0]
 
     if is_l1(mask):
         print(f"{wsi_without_ext} is L1")
@@ -146,11 +144,10 @@ def tumor_stroma_process(wsi_name):
 
 
 if __name__ == "__main__":
-    # wsi_name = "108S.tif"
-    wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
+    # wsi_name = "TC_S01_P000004_C0001_B103.tif"
+    wsi_name_list = os.listdir(wsi_dir)
     for wsi_name in tqdm(wsi_name_list):
         tumor_stroma_process(wsi_name)
-    # with Pool(2) as p:
-    #     p.map(tumor_stroma_process, wsi_name_list)
-
+   
     # tumor_stroma_process(wsi_name)
+

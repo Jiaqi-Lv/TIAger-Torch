@@ -15,6 +15,13 @@ from tqdm.auto import tqdm
 from utils import get_det_models, imagenet_normalise, is_l1, px_to_mm
 
 
+output_dir = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/output"
+wsi_dir = "/home/u1910100/lab-private/it-services/TiGER/new_data/wsitils/images/"
+seg_out_dir = os.path.join(output_dir, "seg_out/")
+det_out_dir = os.path.join(output_dir, "det_out/")
+temp_out_dir = os.path.join(output_dir, "temp_out/")
+
+
 def detections_in_tile(image_tile, det_models):
     patch_size = 128
     overlap = 28
@@ -94,16 +101,18 @@ def tile_detection_stats(predictions, coordinate_list, x, y):
 
 
 def detection_process(wsi_name):
-    output_dir = "output/"
-    wsi_dir = "/home/u1910100/Documents/Tiger_Data/wsitils/images"
+    
     wsi_without_ext = os.path.splitext(wsi_name)[0]
     wsi_path = os.path.join(wsi_dir, wsi_name)
     print(f"Processing {wsi_path}")
-    seg_out_dir = os.path.join(output_dir, "seg_out/")
-    det_out_dir = os.path.join(output_dir, "det_out/")
-    temp_out_dir = os.path.join(output_dir, "temp_out/")
+
+    output_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
+    if os.path.exists(output_path):
+        print("Already processed")
+        return 1
+    
     mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
-    mask = np.load(mask_path)
+    mask = np.load(mask_path)[:,:,0]
 
     if is_l1(mask):
         print("L1")
@@ -164,7 +173,7 @@ if __name__ == "__main__":
     # wsi_name = "244B.tif"
     # detection_process(wsi_name)
 
-    wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
+    wsi_name_list = os.listdir(wsi_dir)
     for wsi_name in tqdm(wsi_name_list, leave=True):
         detection_process(wsi_name=wsi_name)
 

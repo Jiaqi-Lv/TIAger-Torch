@@ -203,9 +203,9 @@ def imagenet_normalise(img: torch.tensor) -> torch.tensor:
 
 
 def get_seg_models():
-    segModel1 = "/home/u1910100/GitHub/TIAger-Torch/runs/tissue/fold_1/model_59.pth"
-    segModel2 = "/home/u1910100/GitHub/TIAger-Torch/runs/tissue/fold_3/model_41.pth"
-    segModel3 = "/home/u1910100/GitHub/TIAger-Torch/runs/tissue/fold_4/model_35.pth"
+    segModel1 = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/runs/tissue/fold_1/model_59.pth"
+    segModel2 = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/runs/tissue/fold_3/model_41.pth"
+    segModel3 = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/runs/tissue/fold_4/model_35.pth"
     segModel = [segModel1, segModel2, segModel3]
 
     models: list[torch.nn.Module] = []
@@ -226,9 +226,9 @@ def get_seg_models():
 
 
 def get_det_models():
-    detModel1 = "/home/u1910100/GitHub/TIAger-Torch/runs/cell/fold_1/model_55.pth"
-    detModel2 = "/home/u1910100/GitHub/TIAger-Torch/runs/cell/fold_2/model_40.pth"
-    detModel3 = "/home/u1910100/GitHub/TIAger-Torch/runs/cell/fold_3/model_30.pth"
+    detModel1 = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/runs/cell/fold_1/model_55.pth"
+    detModel2 = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/runs/cell/fold_2/model_40.pth"
+    detModel3 = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/runs/cell/fold_3/model_30.pth"
     detModel = [detModel1, detModel2, detModel3]
 
     models: list[torch.nn.Module] = []
