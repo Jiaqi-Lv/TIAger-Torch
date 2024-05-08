@@ -9,6 +9,7 @@ import torch
 from tiatoolbox.models.engine.semantic_segmentor import SemanticSegmentor
 from tiatoolbox.tools.patchextraction import get_patch_extractor
 from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
+from tissue_masker_lite import get_mask
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -30,7 +31,7 @@ def detections_in_tile(image_tile, det_models):
     )
 
     predictions = []
-    batch_size = 128
+    batch_size = 256
 
     dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
 
@@ -102,8 +103,28 @@ def detection_process(wsi_name):
     seg_out_dir = os.path.join(output_dir, "seg_out/")
     det_out_dir = os.path.join(output_dir, "det_out/")
     temp_out_dir = os.path.join(output_dir, "temp_out/")
+
+    output_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
+    if os.path.exists(output_path):
+        print("Already processed")
+        return 1
+
     mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
-    mask = np.load(mask_path)
+    if os.path.exists(mask_path):
+        mask = np.load(mask_path)[:, :, 0]
+    else:
+        mask = get_mask(
+            wsi_path=wsi_path,
+            save_dir=temp_out_dir,
+            model_weight="/home/u1910100/GitHub/tissue_masker_lite/tissue_masker_lite/model_weights/model_22.pth",
+        )[:, :, 0]
+
+    image = WSIReader.open(wsi_path)
+    dimensions = image.slide_dimensions(resolution=10, units="power")
+    area = dimensions[0] * dimensions[1]
+    if area > 2500000000:
+        print("Too big to process")
+        return 0
 
     if is_l1(mask):
         print("L1")
@@ -165,6 +186,7 @@ if __name__ == "__main__":
     # detection_process(wsi_name)
 
     wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
-    for wsi_name in tqdm(wsi_name_list, leave=True):
-        detection_process(wsi_name=wsi_name)
-
+    # for wsi_name in tqdm(wsi_name_list, leave=True):
+    #     detection_process(wsi_name=wsi_name)
+    with Pool(2) as p:
+        p.map(detection_process, wsi_name_list)

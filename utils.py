@@ -3,6 +3,7 @@ import os
 import xml.etree.ElementTree as ET
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import segmentation_models_pytorch as smp
 import skimage
@@ -100,7 +101,7 @@ def slide_nms(slide_path, cell_points, tile_size):
 
     center_nms_points = []
 
-    box_size = 8
+    box_size = 5
     # get 2048x2048 patch coordinates without overlap
     for y_pos in range(0, shape[1], tile_size):
         for x_pos in range(0, shape[0], tile_size):
@@ -111,9 +112,9 @@ def slide_nms(slide_path, cell_points, tile_size):
             if len(patch_points) < 2:
                 continue
 
-            # Convert each point to a 8x8 box
+            # Convert each point to a 5x5 box
             boxes = np.array([point_to_box(x[0], x[1], box_size) for x in patch_points])
-            nms_boxes = non_max_suppression_fast(boxes, 0.7)
+            nms_boxes = non_max_suppression_fast(boxes, 0.5)
             for box in nms_boxes:
                 center_nms_points.append(get_centerpoints(box, box_size))
     return center_nms_points
@@ -179,7 +180,8 @@ def create_til_score(wsi_path, cell_points_path, mask):
     cell_counts = len(nms_points)
     # print(f"TIL counts = {cell_counts}")
 
-    til_area = dist_to_px(4, 0.5) ** 2
+    # til_area = dist_to_px(4, 0.5) ** 2
+    til_area = dist_to_px(2.3, 0.5) ** 2
     tils_area = cell_counts * til_area
 
     stroma_area = get_mask_area(mask)
@@ -258,8 +260,6 @@ def get_tumor_bulk(tumor_seg_mask):
         binary_tumor_mask, min_size=mm2_to_px(0.005, mpp), connectivity=2
     )
     wsi_patch = wsi_patch.astype(np.uint8)
-    # plt.imshow(wsi_patch)
-    # plt.show()
 
     kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE, (kernel_diameter, kernel_diameter)
@@ -271,20 +271,18 @@ def get_tumor_bulk(tumor_seg_mask):
     wsi_patch = skimage.morphology.remove_small_objects(
         wsi_patch, min_size=min_size_px, connectivity=2
     )
-    # plt.imshow(wsi_patch)
-    # plt.show()
 
     labels = skimage.measure.label(wsi_patch)
-    tumor_bulk = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
-    # plt.imshow(tumor_bulk)
-    # plt.show()
+    try:
+        tumor_bulk = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
+    except ValueError:
+        tumor_bulk = closing
+
     return tumor_bulk
 
 
 def get_tumor_stroma_mask(bulk_tumor_mask, stroma_mask):
     tumor_stroma_mask = bulk_tumor_mask * stroma_mask
-    # plt.imshow(tumor_stroma_mask)
-    # plt.show()
     mpp = 32
     kernel_diameter = dist_to_px(1000, mpp)
     kernel = cv2.getStructuringElement(
@@ -292,9 +290,12 @@ def get_tumor_stroma_mask(bulk_tumor_mask, stroma_mask):
     )
     closing = cv2.morphologyEx(tumor_stroma_mask, cv2.MORPH_CLOSE, kernel)
     opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)
-    tumor_stroma_mask = opening
-    # plt.imshow(tumor_stroma_mask)
-    # plt.show()
+
+    if np.count_nonzero(opening) > 0:
+        tumor_stroma_mask = opening
+    else:
+        tumor_stroma_mask = closing
+
     return tumor_stroma_mask
 
 

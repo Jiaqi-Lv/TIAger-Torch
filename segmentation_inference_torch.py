@@ -1,3 +1,4 @@
+import gc
 import os
 from multiprocessing import Pool
 
@@ -32,7 +33,7 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
     tumor_predictions: list[np.ndarray] = []
     stroma_predictions: list[np.ndarray] = []
 
-    batch_size = 16
+    batch_size = 32
     dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
 
     for i, imgs in enumerate(tqdm(dataloader, leave=False)):
@@ -60,23 +61,36 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
         tumor_predictions.extend(list(tumor_map))
         stroma_predictions.extend(list(stroma_map))
 
+    print("Merging tumor masks")
+    # canvas_path = f"output/temp_out/{wsi_without_ext}_tumor.npy"
     tumor_mask = SemanticSegmentor.merge_prediction(
         (dimensions[1], dimensions[0]),
         tumor_predictions,
         patch_extractor.coordinate_list,
+        # save_path=canvas_path,
+        # cache_count_path=canvas_path
     )
     tumor_mask = (tumor_mask > 0.5).astype(np.uint8)
     np.save(f"output/seg_out/{wsi_without_ext}_tumor.npy", tumor_mask)
+    del tumor_mask
+    del tumor_predictions
 
+    print("Merging stroma masks")
+    # canvas_path = f"output/temp_out/{wsi_without_ext}_stroma.npy"
     stroma_mask = SemanticSegmentor.merge_prediction(
         (dimensions[1], dimensions[0]),
         stroma_predictions,
         patch_extractor.coordinate_list,
+        # save_path=canvas_path,
+        # cache_count_path=canvas_path
     )
     stroma_mask = (stroma_mask > 0.5).astype(np.uint8)
     np.save(f"output/seg_out/{wsi_without_ext}_stroma.npy", stroma_mask)
+    del stroma_mask
+    del stroma_predictions
 
     print(f"{wsi_without_ext} tumor stroma segmentation complete")
+    return 1
 
 
 def generate_bulk_tumor_stroma(wsi_without_ext):
@@ -99,6 +113,8 @@ def generate_bulk_tumor_stroma(wsi_without_ext):
     tumor_stroma_mask = tumor_stroma_mask.astype(np.uint8)
     np.save(f"output/seg_out/{wsi_without_ext}_tumor_stroma.npy", tumor_stroma_mask)
 
+    return 1
+
 
 def tumor_stroma_process(wsi_name):
     output_dir = "output/"
@@ -114,6 +130,13 @@ def tumor_stroma_process(wsi_name):
 
     wsi_path = os.path.join(wsi_dir, wsi_name)
     wsi_without_ext = os.path.splitext(wsi_name)[0]
+
+    image = WSIReader.open(wsi_path)
+    dimensions = image.slide_dimensions(resolution=10, units="power")
+    area = dimensions[0] * dimensions[1]
+    if area > 2500000000:
+        print("Too big to process")
+        return 0
 
     seg_result_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy")
     if os.path.isfile(seg_result_path):
@@ -150,7 +173,7 @@ if __name__ == "__main__":
     wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
     for wsi_name in tqdm(wsi_name_list):
         tumor_stroma_process(wsi_name)
-    # with Pool(2) as p:
+    # with Pool(4) as p:
     #     p.map(tumor_stroma_process, wsi_name_list)
 
     # tumor_stroma_process(wsi_name)
