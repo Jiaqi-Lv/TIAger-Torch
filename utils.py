@@ -258,8 +258,6 @@ def get_tumor_bulk(tumor_seg_mask):
         binary_tumor_mask, min_size=mm2_to_px(0.005, mpp), connectivity=2
     )
     wsi_patch = wsi_patch.astype(np.uint8)
-    # plt.imshow(wsi_patch)
-    # plt.show()
 
     kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE, (kernel_diameter, kernel_diameter)
@@ -271,20 +269,18 @@ def get_tumor_bulk(tumor_seg_mask):
     wsi_patch = skimage.morphology.remove_small_objects(
         wsi_patch, min_size=min_size_px, connectivity=2
     )
-    # plt.imshow(wsi_patch)
-    # plt.show()
 
     labels = skimage.measure.label(wsi_patch)
-    tumor_bulk = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
-    # plt.imshow(tumor_bulk)
-    # plt.show()
+    try:
+        tumor_bulk = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
+    except ValueError:
+        tumor_bulk = closing
+
     return tumor_bulk
 
 
 def get_tumor_stroma_mask(bulk_tumor_mask, stroma_mask):
     tumor_stroma_mask = bulk_tumor_mask * stroma_mask
-    # plt.imshow(tumor_stroma_mask)
-    # plt.show()
     mpp = 32
     kernel_diameter = dist_to_px(1000, mpp)
     kernel = cv2.getStructuringElement(
@@ -292,9 +288,12 @@ def get_tumor_stroma_mask(bulk_tumor_mask, stroma_mask):
     )
     closing = cv2.morphologyEx(tumor_stroma_mask, cv2.MORPH_CLOSE, kernel)
     opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)
-    tumor_stroma_mask = opening
-    # plt.imshow(tumor_stroma_mask)
-    # plt.show()
+
+    if np.count_nonzero(opening) > 0:
+        tumor_stroma_mask = opening
+    else:
+        tumor_stroma_mask = closing
+
     return tumor_stroma_mask
 
 

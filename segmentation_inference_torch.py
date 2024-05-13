@@ -20,7 +20,6 @@ det_out_dir = os.path.join(output_dir, "det_out/")
 
 def tumor_stroma_segmentation(wsi_path, mask, models):
     wsi_without_ext = os.path.splitext(os.path.basename(wsi_path))[0]
-    print(wsi_path)
     image = TIFFWSIReader.open(wsi_path)
     dimensions = image.slide_dimensions(resolution=10, units="power")
 
@@ -71,8 +70,10 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
         patch_extractor.coordinate_list,
     )
     tumor_mask = (tumor_mask > 0.5).astype(np.uint8)
+    tumor_mask_reader = VirtualWSIReader.open(tumor_mask, power=10, mode='bool')
+    tumor_mask = tumor_mask_reader.slide_thumbnail(resolution=0.3125, units="power")
     out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor.npy")
-    np.save(out_path, tumor_mask)
+    np.save(out_path, tumor_mask[:,:,0])
 
     stroma_mask = SemanticSegmentor.merge_prediction(
         (dimensions[1], dimensions[0]),
@@ -80,8 +81,10 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
         patch_extractor.coordinate_list,
     )
     stroma_mask = (stroma_mask > 0.5).astype(np.uint8)
+    stroma_mask_reader = VirtualWSIReader.open(stroma_mask, power=10, mode="bool")
+    stroma_mask = stroma_mask_reader.slide_thumbnail(resolution=0.3125, units="power")
     out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_stroma.npy")
-    np.save(out_path, stroma_mask)
+    np.save(out_path, stroma_mask[:,:,0])
 
     print(f"{wsi_without_ext} tumor stroma segmentation complete")
 
@@ -89,18 +92,11 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
 def generate_bulk_tumor_stroma(wsi_without_ext):
     tumor_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor.npy")
     stroma_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_stroma.npy")
-    tumor_mask = np.load(tumor_mask_path)[:, :, 0]
-    tumor_mask = VirtualWSIReader.open(tumor_mask, power=10, mode="bool")
-    tumor_mask_thumb = tumor_mask.slide_thumbnail(resolution=0.3125, units="power")
-    binary_tumor_mask = tumor_mask_thumb[:, :, 0]
-    tumor_bulk = get_tumor_bulk(binary_tumor_mask)
+    tumor_mask = np.load(tumor_mask_path)
+    tumor_bulk = get_tumor_bulk(tumor_mask)
 
-    stroma_mask = np.load(stroma_mask_path)[:, :, 0]
-    stroma_mask = VirtualWSIReader.open(stroma_mask, power=10, mode="bool")
-    stroma_mask_thumb = stroma_mask.slide_thumbnail(resolution=0.3125, units="power")
-    binary_stroma_mask = stroma_mask_thumb[:, :, 0]
-
-    tumor_stroma_mask = get_tumor_stroma_mask(tumor_bulk, binary_stroma_mask)
+    stroma_mask = np.load(stroma_mask_path)
+    tumor_stroma_mask = get_tumor_stroma_mask(tumor_bulk, stroma_mask)
     tumor_stroma_mask = tumor_stroma_mask.astype(np.uint8)
     out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy")
     np.save(out_path, tumor_stroma_mask)

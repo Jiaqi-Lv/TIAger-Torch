@@ -1,6 +1,5 @@
 import json
 import os
-from multiprocessing import Pool
 
 import numpy as np
 import skimage
@@ -17,10 +16,9 @@ from utils import get_det_models, imagenet_normalise, is_l1, px_to_mm
 
 output_dir = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/output"
 wsi_dir = "/home/u1910100/lab-private/it-services/TiGER/new_data/wsitils/images/"
+temp_out_dir = os.path.join(output_dir, "temp_out/")
 seg_out_dir = os.path.join(output_dir, "seg_out/")
 det_out_dir = os.path.join(output_dir, "det_out/")
-temp_out_dir = os.path.join(output_dir, "temp_out/")
-
 
 def detections_in_tile(image_tile, det_models):
     patch_size = 128
@@ -68,7 +66,7 @@ def tile_detection_stats(predictions, coordinate_list, x, y):
         (1024, 1024), predictions, coordinate_list
     )
     threshold = 0.99
-    tile_prediction_mask = tile_prediction > threshold
+    tile_prediction_mask = tile_prediction >= threshold
 
     mask_label = skimage.measure.label(tile_prediction_mask)
 
@@ -120,7 +118,7 @@ def detection_process(wsi_name):
     else:
         print("L2")
         tumor_stroma_mask_path = os.path.join(
-            seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy"
+            seg_out_dir, f"{wsi_without_ext}_stroma_bulk.npy"
         )
         tumor_stroma_mask = np.load(tumor_stroma_mask_path)
         input_mask = tumor_stroma_mask
@@ -154,7 +152,7 @@ def detection_process(wsi_name):
             predictions, coordinates, bounding_box[0], bounding_box[1]
         )
         annotations.extend(annotations_tile)
-        output_dict["points"].extend(output_points_tile)
+        # output_dict["points"].extend(output_points_tile)
 
     # output_path = (
     #     os.path.join(det_out_dir, f"{wsi_without_ext}.json"
@@ -172,8 +170,11 @@ def detection_process(wsi_name):
 if __name__ == "__main__":
     # wsi_name = "244B.tif"
     # detection_process(wsi_name)
-
-    wsi_name_list = os.listdir(wsi_dir)
+    
+    start = 62
+    print(f"indices {start} - end")
+    wsi_name_list = sorted(os.listdir(wsi_dir))
+    wsi_name_list = wsi_name_list[start:]
     for wsi_name in tqdm(wsi_name_list, leave=True):
         detection_process(wsi_name=wsi_name)
 
