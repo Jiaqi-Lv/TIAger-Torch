@@ -15,6 +15,12 @@ from tqdm.auto import tqdm
 
 from utils import get_det_models, imagenet_normalise, is_l1, px_to_mm
 
+output_dir = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/output"
+wsi_dir = "/home/u1910100/lab-private/it-services/TiGER/new_data/wsitils/images/"
+temp_out_dir = os.path.join(output_dir, "temp_out/")
+seg_out_dir = os.path.join(output_dir, "seg_out/")
+det_out_dir = os.path.join(output_dir, "det_out/")
+
 
 def detections_in_tile(image_tile, det_models):
     patch_size = 128
@@ -95,36 +101,19 @@ def tile_detection_stats(predictions, coordinate_list, x, y):
 
 
 def detection_process(wsi_name):
-    output_dir = "output/"
-    wsi_dir = "/home/u1910100/Documents/Tiger_Data/wsitils/images"
     wsi_without_ext = os.path.splitext(wsi_name)[0]
     wsi_path = os.path.join(wsi_dir, wsi_name)
     print(f"Processing {wsi_path}")
-    seg_out_dir = os.path.join(output_dir, "seg_out/")
-    det_out_dir = os.path.join(output_dir, "det_out/")
-    temp_out_dir = os.path.join(output_dir, "temp_out/")
 
+    if not os.path.exists(det_out_dir):
+        os.makedirs(det_out_dir)
     output_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
     if os.path.exists(output_path):
         print("Already processed")
         return 1
 
     mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
-    if os.path.exists(mask_path):
-        mask = np.load(mask_path)[:, :, 0]
-    else:
-        mask = get_mask(
-            wsi_path=wsi_path,
-            save_dir=temp_out_dir,
-            model_weight="/home/u1910100/GitHub/tissue_masker_lite/tissue_masker_lite/model_weights/model_22.pth",
-        )[:, :, 0]
-
-    image = WSIReader.open(wsi_path)
-    dimensions = image.slide_dimensions(resolution=10, units="power")
-    area = dimensions[0] * dimensions[1]
-    if area > 2500000000:
-        print("Too big to process")
-        return 0
+    mask = np.load(mask_path)[:, :, 0]
 
     if is_l1(mask):
         print("L1")
@@ -132,7 +121,7 @@ def detection_process(wsi_name):
     else:
         print("L2")
         tumor_stroma_mask_path = os.path.join(
-            seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy"
+            seg_out_dir, f"{wsi_without_ext}_stroma_bulk.npy"
         )
         tumor_stroma_mask = np.load(tumor_stroma_mask_path)
         input_mask = tumor_stroma_mask
@@ -166,7 +155,7 @@ def detection_process(wsi_name):
             predictions, coordinates, bounding_box[0], bounding_box[1]
         )
         annotations.extend(annotations_tile)
-        output_dict["points"].extend(output_points_tile)
+        # output_dict["points"].extend(output_points_tile)
 
     # output_path = (
     #     os.path.join(det_out_dir, f"{wsi_without_ext}.json"
@@ -182,11 +171,6 @@ def detection_process(wsi_name):
 
 
 if __name__ == "__main__":
-    # wsi_name = "244B.tif"
-    # detection_process(wsi_name)
-
-    wsi_name_list = os.listdir("/home/u1910100/Documents/Tiger_Data/wsitils/images")
-    # for wsi_name in tqdm(wsi_name_list, leave=True):
-    #     detection_process(wsi_name=wsi_name)
+    wsi_name_list = os.listdir(wsi_dir)
     with Pool(2) as p:
         p.map(detection_process, wsi_name_list)
