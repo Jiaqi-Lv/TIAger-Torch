@@ -13,13 +13,14 @@ from tissue_masker_lite import get_mask
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
+from config import DefaultConfig
 from utils import get_det_models, imagenet_normalise, is_l1, px_to_mm
 
-output_dir = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/output"
-wsi_dir = "/home/u1910100/lab-private/it-services/TiGER/new_data/wsitils/images/"
-temp_out_dir = os.path.join(output_dir, "temp_out/")
-seg_out_dir = os.path.join(output_dir, "seg_out/")
-det_out_dir = os.path.join(output_dir, "det_out/")
+output_dir = DefaultConfig.output_dir
+wsi_dir = DefaultConfig.wsi_dir
+temp_out_dir = DefaultConfig.temp_out_dir
+seg_out_dir = DefaultConfig.seg_out_dir
+det_out_dir = DefaultConfig.det_out_dir
 
 
 def detections_in_tile(image_tile, det_models):
