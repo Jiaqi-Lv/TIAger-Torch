@@ -8,10 +8,17 @@ import torch
 from tiatoolbox.models.engine.semantic_segmentor import SemanticSegmentor
 from tiatoolbox.tools.patchextraction import get_patch_extractor
 from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
+from tissue_masker_lite import get_mask
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from utils import get_det_models, imagenet_normalise, is_l1, px_to_mm
+
+output_dir = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/output"
+wsi_dir = "/home/u1910100/lab-private/it-services/TiGER/new_data/wsitils/images/"
+temp_out_dir = os.path.join(output_dir, "temp_out/")
+seg_out_dir = os.path.join(output_dir, "seg_out/")
+det_out_dir = os.path.join(output_dir, "det_out/")
 
 
 output_dir = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/output"
@@ -35,7 +42,7 @@ def detections_in_tile(image_tile, det_models):
     )
 
     predictions = []
-    batch_size = 128
+    batch_size = 256
 
     dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
 
@@ -99,18 +106,20 @@ def tile_detection_stats(predictions, coordinate_list, x, y):
 
 
 def detection_process(wsi_name):
-    
     wsi_without_ext = os.path.splitext(wsi_name)[0]
     wsi_path = os.path.join(wsi_dir, wsi_name)
     print(f"Processing {wsi_path}")
+
+    if not os.path.exists(det_out_dir):
+        os.makedirs(det_out_dir)
 
     output_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
     if os.path.exists(output_path):
         print("Already processed")
         return 1
-    
+
     mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
-    mask = np.load(mask_path)[:,:,0]
+    mask = np.load(mask_path)[:, :, 0]
 
     if is_l1(mask):
         print("L1")
@@ -168,13 +177,6 @@ def detection_process(wsi_name):
 
 
 if __name__ == "__main__":
-    # wsi_name = "244B.tif"
-    # detection_process(wsi_name)
-    
-    start = 62
-    print(f"indices {start} - end")
-    wsi_name_list = sorted(os.listdir(wsi_dir))
-    wsi_name_list = wsi_name_list[start:]
-    for wsi_name in tqdm(wsi_name_list, leave=True):
-        detection_process(wsi_name=wsi_name)
-
+    wsi_name_list = os.listdir(wsi_dir)
+    with Pool(2) as p:
+        p.map(detection_process, wsi_name_list)

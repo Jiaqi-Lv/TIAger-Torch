@@ -1,15 +1,21 @@
 import json
+import math
 import os
 import xml.etree.ElementTree as ET
 
 import cv2
 import numpy as np
 import segmentation_models_pytorch as smp
+import shapely
+import shapely.geometry as geometry
 import skimage
 import torch
+from PIL import Image, ImageDraw
+from scipy.spatial import Delaunay
 from shapely import Point, Polygon
+from shapely.ops import polygonize, unary_union
 from tiatoolbox.annotation.storage import Annotation, SQLiteStore
-from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
+from tiatoolbox.wsicore.wsireader import WSIReader
 
 
 def mm2_to_px(mm2, mpp):
@@ -100,7 +106,7 @@ def slide_nms(slide_path, cell_points, tile_size):
 
     center_nms_points = []
 
-    box_size = 8
+    box_size = 5
     # get 2048x2048 patch coordinates without overlap
     for y_pos in range(0, shape[1], tile_size):
         for x_pos in range(0, shape[0], tile_size):
@@ -111,9 +117,9 @@ def slide_nms(slide_path, cell_points, tile_size):
             if len(patch_points) < 2:
                 continue
 
-            # Convert each point to a 8x8 box
+            # Convert each point to a 5x5 box
             boxes = np.array([point_to_box(x[0], x[1], box_size) for x in patch_points])
-            nms_boxes = non_max_suppression_fast(boxes, 0.7)
+            nms_boxes = non_max_suppression_fast(boxes, 0.5)
             for box in nms_boxes:
                 center_nms_points.append(get_centerpoints(box, box_size))
     return center_nms_points
@@ -173,22 +179,20 @@ def create_til_score(wsi_path, cell_points_path, mask):
     else:
         cell_points = points_from_xml(cell_points_path)
 
-    # print(f"{len(cell_points)} before nms")
     nms_points = slide_nms(slide_path=wsi_path, cell_points=cell_points, tile_size=2048)
 
     cell_counts = len(nms_points)
     # print(f"TIL counts = {cell_counts}")
 
-    til_area = dist_to_px(4, 0.5) ** 2
+    # til_area = dist_to_px(4, 0.5) ** 2
+    til_area = dist_to_px(2.3, 0.5) ** 2
     tils_area = cell_counts * til_area
 
     stroma_area = get_mask_area(mask)
-    # print(f"stroma area = {stroma_area}")
     tilscore = int((100 / int(stroma_area)) * int(tils_area))
     tilscore = min(100, tilscore)
     tilscore = max(0, tilscore)
     return tilscore
-    # print(f"tilscore = {tilscore}")
 
 
 def imagenet_normalise(img: torch.tensor) -> torch.tensor:
@@ -248,11 +252,75 @@ def get_det_models():
     return models
 
 
-def get_tumor_bulk(tumor_seg_mask):
-    binary_tumor_mask = tumor_seg_mask.astype(bool)
+def alpha_shape(points, alpha):
+    def add_edge(edges, edge_points, coords, i, j):
+        """
+        Add a line between the i-th and j-th points,
+        if not in the list already
+        """
+        if (i, j) in edges or (j, i) in edges:
+            return
+        edges.add((i, j))
+        edge_points.append([coords[i], coords[j]])
+
+    coords = [(i[0], i[1]) if type(i) or tuple else i for i in points]
+    tri = Delaunay(coords)
+    edges = set()
+    edge_points = []
+
+    # loop over triangles:
+    # ia, ib, ic = indices of corner points of the
+    # triangle
+    for ia, ib, ic in tri.simplices:
+        pa = coords[ia]
+        pb = coords[ib]
+        pc = coords[ic]
+        # Lengths of sides of triangle
+        a = math.sqrt((pa[0] - pb[0]) ** 2 + (pa[1] - pb[1]) ** 2)
+        b = math.sqrt((pb[0] - pc[0]) ** 2 + (pb[1] - pc[1]) ** 2)
+        c = math.sqrt((pc[0] - pa[0]) ** 2 + (pc[1] - pa[1]) ** 2)
+        # Semiperimeter of triangle
+        s = (a + b + c) / 2.0
+        # Area of triangle by Heron's formula
+        area = math.sqrt(s * (s - a) * (s - b) * (s - c))
+        circum_r = a * b * c / (4.0 * area)
+        # Here's the radius filter.
+        # print circum_r
+        if circum_r < 1 / alpha:
+            add_edge(edges, edge_points, coords, ia, ib)
+            add_edge(edges, edge_points, coords, ib, ic)
+            add_edge(edges, edge_points, coords, ic, ia)
+    m = geometry.MultiLineString(edge_points)
+    triangles = list(polygonize(m))
+    return unary_union(triangles), edge_points
+
+
+def calc_ratio(patch):
+    ratio_patch = patch.copy()
+    ratio_patch[ratio_patch > 1] = 1
+    counts = np.unique(ratio_patch, return_counts=True)
+    try:
+        return (100 / counts[1][0]) * counts[1][1]
+    except IndexError as ie:
+        print(ie)
+        print("Could not calculate ratio, using 0")
+        return 0
+
+
+def get_bulk(tumor_seg_mask):
+    ratio = calc_ratio(tumor_seg_mask)
+    print(ratio)
     mpp = 32
-    min_size_px = mm2_to_px(1.0, mpp)
-    kernel_diameter = dist_to_px(1000, mpp)
+    min_size = 1.5
+
+    if ratio > 50.0:
+        kernel_diameter = dist_to_px(1000, mpp)
+        min_size_px = mm2_to_px(min_size, mpp)
+    else:
+        min_size_px = mm2_to_px(1.0, mpp)
+        kernel_diameter = dist_to_px(500, mpp)
+
+    binary_tumor_mask = tumor_seg_mask.astype(bool)
 
     wsi_patch = skimage.morphology.remove_small_objects(
         binary_tumor_mask, min_size=mm2_to_px(0.005, mpp), connectivity=2
@@ -266,16 +334,48 @@ def get_tumor_bulk(tumor_seg_mask):
     opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)
     wsi_patch = opening
     wsi_patch = wsi_patch.astype(bool)
-    wsi_patch = skimage.morphology.remove_small_objects(
+    wsi_patch_indexes = skimage.morphology.remove_small_objects(
         wsi_patch, min_size=min_size_px, connectivity=2
     )
 
-    labels = skimage.measure.label(wsi_patch)
-    try:
-        tumor_bulk = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
-    except ValueError:
-        tumor_bulk = closing
+    wsi_patch = wsi_patch.astype(np.uint8)
+    wsi_patch[wsi_patch_indexes == False] = 0
+    wsi_patch[wsi_patch_indexes == True] = 1
 
+    points = np.argwhere(wsi_patch == 1)
+    if len(points) == 0:
+        print(f"no hull found")
+        return wsi_patch
+
+    alpha = 0.07
+    concave_hull, _ = alpha_shape(points, alpha)
+    if isinstance(concave_hull, shapely.geometry.polygon.Polygon) or isinstance(
+        concave_hull, shapely.geometry.GeometryCollection
+    ):
+        polygons = [concave_hull]
+    else:
+        polygons = list(concave_hull.geoms)
+
+    buffersize = dist_to_px(250, mpp)
+    polygons = [
+        geometry.Polygon(list(x.buffer(buffersize).exterior.coords)) for x in polygons
+    ]
+
+    coordinates = []
+    for polygon in polygons:
+        if polygon.area < min_size_px:
+            continue
+
+        coordinates.append(
+            [(int(x[1]), int(x[0])) for x in polygon.boundary.coords[:-1]]
+        )
+    print(f"tumor bulk counts {len(coordinates)}")
+
+    dimensions = tumor_seg_mask.shape
+    img = Image.new("L", (dimensions[1], dimensions[0]), 0)
+    for poly in coordinates:
+        ImageDraw.Draw(img).polygon(poly, outline=1, fill=1)
+    tumor_bulk = np.array(img, dtype=np.uint8)
     return tumor_bulk
 
 
