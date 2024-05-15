@@ -26,7 +26,7 @@ def til_score_process(wsi_name):
     wsi_path = os.path.join(wsi_dir, wsi_name)
 
     if not os.path.exists(cell_points_path):
-        print("No detection map found")
+        print(f"No detection map found for {wsi_without_ext}")
         return 0
 
     tumor_stroma_mask_path = os.path.join(
@@ -47,7 +47,7 @@ def til_score_process(wsi_name):
     output_tils_path = os.path.join(output_tils_dir, f"{wsi_without_ext}.txt")
     with open(output_tils_path, "w") as file:
         file.write(str(score))
-    print("TIL score saved")
+    print(f"{wsi_without_ext} TIL score saved")
     return score
 
 
