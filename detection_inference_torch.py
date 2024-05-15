@@ -26,7 +26,8 @@ det_out_dir = DefaultConfig.det_out_dir
 def detections_in_tile(image_tile, det_models):
     patch_size = 128
     stride = 100
-    tile_reader = VirtualWSIReader(image_tile, power=20)
+    tile_reader = VirtualWSIReader.open(image_tile, power=20.0, mpp=(0.5, 0.5))
+    print(tile_reader.info.as_dict())
 
     patch_extractor = get_patch_extractor(
         input_img=tile_reader,
