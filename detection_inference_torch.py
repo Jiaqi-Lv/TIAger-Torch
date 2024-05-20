@@ -13,35 +13,37 @@ from tissue_masker_lite import get_mask
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
+from config import DefaultConfig
 from utils import get_det_models, imagenet_normalise, is_l1, px_to_mm
 
-output_dir = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/output"
-wsi_dir = "/home/u1910100/lab-private/it-services/TiGER/new_data/wsitils/images/"
-temp_out_dir = os.path.join(output_dir, "temp_out/")
-seg_out_dir = os.path.join(output_dir, "seg_out/")
-det_out_dir = os.path.join(output_dir, "det_out/")
+output_dir = DefaultConfig.output_dir
+wsi_dir = DefaultConfig.wsi_dir
+temp_out_dir = DefaultConfig.temp_out_dir
+seg_out_dir = DefaultConfig.seg_out_dir
+det_out_dir = DefaultConfig.det_out_dir
 
 
 def detections_in_tile(image_tile, det_models):
     patch_size = 128
-    overlap = 28
-    tile_reader = VirtualWSIReader(image_tile, power=20)
+    stride = 100
+    tile_reader = VirtualWSIReader.open(image_tile, power=20.0, mpp=(0.5, 0.5))
+    print(tile_reader.info.as_dict())
 
     patch_extractor = get_patch_extractor(
         input_img=tile_reader,
         method_name="slidingwindow",
         patch_size=(patch_size, patch_size),
-        stride=(overlap, overlap),
+        stride=(stride, stride),
         resolution=20,
         units="power",
     )
 
     predictions = []
-    batch_size = 256
+    batch_size = 32
 
     dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
 
-    for i, imgs in enumerate(tqdm(dataloader, leave=False)):
+    for i, imgs in enumerate(dataloader):
         imgs = torch.permute(imgs, (0, 3, 1, 2))
         imgs = imgs / 255
         imgs = imagenet_normalise(imgs)
@@ -86,16 +88,16 @@ def tile_detection_stats(predictions, coordinate_list, x, y):
 
         c1 = c + x
         r1 = r + y
-        prediction_record = {
-            "point": [
-                float(px_to_mm(c1, 0.5)),
-                float(px_to_mm(r1, 0.5)),
-                float(0.5009999871253967),
-            ],
-            "probability": float(confidence),
-        }
+        # prediction_record = {
+        #     "point": [
+        #         float(px_to_mm(c1, 0.5)),
+        #         float(px_to_mm(r1, 0.5)),
+        #         float(0.5009999871253967),
+        #     ],
+        #     "probability": float(confidence),
+        # }
 
-        output_points.append(prediction_record)
+        # output_points.append(prediction_record)
         annotations.append((int(c1), int(r1)))
     return annotations, output_points
 
@@ -146,7 +148,9 @@ def detection_process(wsi_name):
         "points": [],
     }
 
-    for i, tile in enumerate(tqdm(tile_extractor, leave=False)):
+    for i, tile in enumerate(
+        tqdm(tile_extractor, leave=False, desc=f"{wsi_without_ext} progress")
+    ):
         bounding_box = tile_extractor.coordinate_list[
             i
         ]  # (x_start, y_start, x_end, y_end)
@@ -172,5 +176,11 @@ def detection_process(wsi_name):
 
 if __name__ == "__main__":
     wsi_name_list = os.listdir(wsi_dir)
-    with Pool(2) as p:
-        p.map(detection_process, wsi_name_list)
+    with Pool(5) as p:
+        list(
+            tqdm(
+                p.imap(detection_process, wsi_name_list, chunksize=15),
+                total=len(wsi_name_list),
+                desc="Multiprocessing Progress",
+            )
+        )

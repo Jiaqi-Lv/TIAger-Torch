@@ -7,14 +7,15 @@ from tiatoolbox.wsicore.wsireader import VirtualWSIReader
 from tissue_masker_lite import get_mask
 from tqdm.auto import tqdm
 
+from config import DefaultConfig
 from utils import create_til_score, is_l1
 
-output_dir = "/home/u1910100/cloud_workspace/GitHub/TIAger-Torch/output"
-wsi_dir = "/home/u1910100/lab-private/it-services/TiGER/new_data/wsitils/images/"
-temp_out_dir = os.path.join(output_dir, "temp_out/")
-seg_out_dir = os.path.join(output_dir, "seg_out/")
-det_out_dir = os.path.join(output_dir, "det_out/")
-output_tils_dir = os.path.join(output_dir, f"tils/")
+output_dir = DefaultConfig.output_dir
+wsi_dir = DefaultConfig.wsi_dir
+temp_out_dir = DefaultConfig.temp_out_dir
+seg_out_dir = DefaultConfig.seg_out_dir
+det_out_dir = DefaultConfig.det_out_dir
+output_tils_dir = DefaultConfig.output_tils_dir
 
 
 def til_score_process(wsi_name):
@@ -25,7 +26,7 @@ def til_score_process(wsi_name):
     wsi_path = os.path.join(wsi_dir, wsi_name)
 
     if not os.path.exists(cell_points_path):
-        print("No detection map found")
+        print(f"No detection map found for {wsi_without_ext}")
         return 0
 
     tumor_stroma_mask_path = os.path.join(
@@ -46,7 +47,7 @@ def til_score_process(wsi_name):
     output_tils_path = os.path.join(output_tils_dir, f"{wsi_without_ext}.txt")
     with open(output_tils_path, "w") as file:
         file.write(str(score))
-    print("TIL score saved")
+    print(f"{wsi_without_ext} TIL score saved")
     return score
 
 

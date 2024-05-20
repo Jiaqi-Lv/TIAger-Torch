@@ -190,8 +190,8 @@ def create_til_score(wsi_path, cell_points_path, mask):
 
     stroma_area = get_mask_area(mask)
     tilscore = int((100 / int(stroma_area)) * int(tils_area))
-    tilscore = min(100, tilscore)
-    tilscore = max(0, tilscore)
+    tilscore = min(99, tilscore)
+    tilscore = max(1, tilscore)
     return tilscore
 
 
