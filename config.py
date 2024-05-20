@@ -27,4 +27,33 @@ class Config:
             os.makedirs(self.output_tils_dir)
 
 
+class Challenge_Config:
+    def __init__(
+        self,
+        wsi_dir="/input",
+        output_dir="/output",
+    ) -> None:
+        self.output_dir = output_dir
+        self.wsi_dir = wsi_dir
+
+        self.temp_out_dir = os.path.join(self.output_dir, "images/")  # Input mask dir
+        self.seg_out_dir = os.path.join(
+            self.output_dir, "images/breast-cancer-segmentation-for-tils/"
+        )
+        self.det_out_dir = self.output_dir
+        self.output_tils_dir = self.output_dir
+        self.create_dirs()
+
+    def create_dirs(self):
+        if not os.path.exists(self.temp_out_dir):
+            os.makedirs(self.temp_out_dir)
+        if not os.path.exists(self.seg_out_dir):
+            os.makedirs(self.seg_out_dir)
+        if not os.path.exists(self.det_out_dir):
+            os.makedirs(self.det_out_dir)
+        if not os.path.exists(self.output_tils_dir):
+            os.makedirs(self.output_tils_dir)
+
+
 DefaultConfig = Config()
+ChallengeConfig = Challenge_Config()

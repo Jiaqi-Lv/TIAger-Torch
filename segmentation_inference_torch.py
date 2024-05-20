@@ -135,6 +135,38 @@ def generate_bulk_tumor_stroma(wsi_without_ext):
     return 1
 
 
+def tumor_stroma_process_l1(wsi_name):
+    if not os.path.exists(seg_out_dir):
+        os.makedirs(seg_out_dir)
+
+    wsi_path = os.path.join(wsi_dir, wsi_name)
+    wsi_without_ext = os.path.splitext(wsi_name)[0]
+
+    print(f"Processing {wsi_without_ext}")
+
+    seg_result_path = os.path.join(seg_out_dir, f"{wsi_without_ext}.tif")
+    if os.path.isfile(seg_result_path):
+        print(f"{wsi_without_ext} already processed")
+        return 1
+
+    # Load tissue mask
+    print("Loading tissue mask")
+    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.tif")
+    mask_reader = WSIReader.open(mask_path)
+    mask = mask_reader.slide_thumbnail(resolution=0.3125, units="power")[:, :, 0]
+
+    models = get_seg_models()
+    print("Running tissue segmentation")
+    tumor_stroma_segmentation(wsi_path, mask, models)
+
+    # Generate tumor bulk
+    print("Generating bulk tumor stroma")
+    generate_bulk_tumor_stroma(wsi_without_ext)
+
+    print("Tumor stroma mask saved")
+    return 1
+
+
 def tumor_stroma_process(wsi_name):
     if not os.path.exists(seg_out_dir):
         os.makedirs(seg_out_dir)
