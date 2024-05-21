@@ -20,6 +20,20 @@ RUN apt-get update && apt-get install -y git
 RUN python3.11 -m venv /venv
 ENV PATH=/venv/bin:$PATH
 
+# Install ASAP
+
+RUN : \
+    && apt-get update \
+    && apt-get -y install curl git \
+    && curl --remote-name --location "https://github.com/computationalpathologygroup/ASAP/releases/download/ASAP-2.2-(Nightly)/ASAP-2.2-Ubuntu2204.deb" \
+    && dpkg --install ASAP-2.2-Ubuntu2204.deb || true \
+    && apt-get -f install --fix-missing --fix-broken --assume-yes \
+    && ldconfig -v \
+    && apt-get clean \
+    && echo "/opt/ASAP/bin" > /venv/lib/python3.11/site-packages/asap.pth \
+    && rm ASAP-2.2-Ubuntu2204.deb \
+    && :
+
 # install TIAToolbox and its requirements
 RUN apt-get update && apt-get install --no-install-recommends -y \
     libopenjp2-7-dev libopenjp2-tools \
@@ -30,6 +44,9 @@ RUN pip install --no-cache-dir tiatoolbox
 
 # install segmentation-models-pytorch
 RUN pip install --no-cache-dir segmentation-models-pytorch
+
+# install wholeslidedata
+RUN pip install git+https://github.com/DIAGNijmegen/pathology-whole-slide-data@main
 
 # activate virtual environment
 ENV VIRTUAL_ENV=/opt/venv
@@ -44,5 +61,19 @@ RUN chown algorithm:algorithm /opt/algorithm /input /output
 USER algorithm
 WORKDIR /opt/algorithm
 
-RUN git clone -b docker https://github.com/Jiaqi-Lv/TIAger-Torch.git
-RUN chmod -R 755 TIAger-Torch/
+# RUN git clone -b docker https://github.com/Jiaqi-Lv/TIAger-Torch.git
+# RUN chmod -R 755 TIAger-Torch/
+COPY --chown=algorithm:algorithm ./ /opt/algorithm/TIAger-Torch
+COPY --chown=algorithm:algorithm testinput /input/
+COPY --chown=algorithm:algorithm testinput/images /input/images/
+
+# Compute requirements
+LABEL processor.cpus="1"
+LABEL processor.cpu.capabilities="null"
+LABEL processor.memory="32G"
+LABEL processor.gpu_count="1"
+LABEL processor.gpu.compute_capability="null"
+LABEL processor.gpu.memory="12G"
+
+WORKDIR /opt/algorithm/TIAger-Torch
+ENTRYPOINT python -u l1_pipeline.py

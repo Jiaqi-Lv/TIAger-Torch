@@ -4,7 +4,6 @@ from multiprocessing import Pool
 
 import numpy as np
 from tiatoolbox.wsicore.wsireader import VirtualWSIReader
-from tissue_masker_lite import get_mask
 from tqdm.auto import tqdm
 
 from config import DefaultConfig

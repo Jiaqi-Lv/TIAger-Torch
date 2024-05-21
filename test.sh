@@ -6,30 +6,36 @@ SEGMENTATION_FILE="/output/images/breast-cancer-segmentation-for-tils/segmentati
 DETECTION_FILE="/output/detected-lymphocytes.json"
 TILS_SCORE_FILE="/output/til-score.json"
 
-MEMORY=30g
+MEMORY=32g
 
 echo "Building docker"
 ./build.sh
 
-# echo "Removing volume..."
-# docker volume rm tiager_torch
-# docker volume rm tiager_torch-tmp
+echo "Creating volume..."
+docker volume create tiger-output
 
-# echo "Creating volume..."
-# docker volume create tiager_torch
-# docker volume create tiager_torch-tmp
-# echo $SCRIPTPATH/testinput/
-# echo "Running algorithm..."
+echo "Running algorithm..."
+docker run --rm \
+        --memory=$MEMORY \
+        --memory-swap=$MEMORY \
+        --network=none \
+        --cap-drop=ALL \
+        --security-opt="no-new-privileges" \
+        --shm-size=128m \
+        --pids-limit=256 \
+        --gpus all \
+        -v $SCRIPTPATH/testinput/:/input/ \
+        -v tiger-output:/output/ \
+        tiager_torch
 
-# docker run --rm \
-#         --memory=$MEMORY \
-#         --memory-swap=$MEMORY \
-#         --network=none \
-#         --cap-drop=ALL \
-#         --security-opt="no-new-privileges" \
-#         --shm-size=128m \
-#         --pids-limit=256 \
-#         -v tiager-ensemble:/output/ \
-#         -v tiager-ensemble-tmp:/tempoutput/ \
-#         --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=0 \
-#         tiagerensemble
+echo "Checking output files..."
+docker run --rm \
+        -v tiger-output:/output/ \
+        python:3.11 \
+        python -m json.tool $DETECTION_FILE; \
+        /bin/bash; \
+        [[ -f $SEGMENTATION_FILE ]] || printf 'Expected file %s does not exist!\n' "$SEGMENTATION_FILE"; \
+        # [[ -f $TILS_SCORE_FILE ]] || printf 'Expected file %s does not exist!\n' "$TILS_SCORE_FILE"; \
+
+echo "Removing volume..."
+docker volume rm tiger-output

@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import sys
 import xml.etree.ElementTree as ET
 
 import cv2
@@ -15,7 +16,17 @@ from scipy.spatial import Delaunay
 from shapely import Point, Polygon
 from shapely.ops import polygonize, unary_union
 from tiatoolbox.annotation.storage import Annotation, SQLiteStore
+from tiatoolbox.tools.patchextraction import SlidingWindowPatchExtractor
 from tiatoolbox.wsicore.wsireader import WSIReader
+
+sys.path.append("/opt/ASAP/bin")
+from wholeslidedata.interoperability.asap.imagewriter import \
+    WholeSlideMonochromeMaskWriter
+
+from config import ChallengeConfig, DefaultConfig
+
+cell_model_dir = ChallengeConfig.cell_model_dir
+tissue_mdoel_dir = ChallengeConfig.tissue_model_dir
 
 
 def mm2_to_px(mm2, mpp):
@@ -207,18 +218,18 @@ def imagenet_normalise(img: torch.tensor) -> torch.tensor:
 
 
 def get_seg_models():
-    segModel1 = "/home/u1910100/GitHub/TIAger-Torch/runs/tissue/fold_1/model_59.pth"
-    segModel2 = "/home/u1910100/GitHub/TIAger-Torch/runs/tissue/fold_3/model_41.pth"
-    segModel3 = "/home/u1910100/GitHub/TIAger-Torch/runs/tissue/fold_4/model_35.pth"
+    segModel1 = os.path.join(tissue_mdoel_dir, "tissue_1.pth")
+    segModel2 = os.path.join(tissue_mdoel_dir, "tissue_3.pth")
+    segModel3 = os.path.join(tissue_mdoel_dir, "tissue_4.pth")
     segModel = [segModel1, segModel2, segModel3]
 
     models: list[torch.nn.Module] = []
     for model_path in segModel:
         model = smp.Unet(
-            encoder_name="efficientnet-b0",  # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-            encoder_weights=None,  # use `imagenet` pre-trained weights for encoder initialization
-            in_channels=3,  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
-            classes=3,  # model output channels (number of classes in your dataset)
+            encoder_name="efficientnet-b0",
+            encoder_weights=None,
+            in_channels=3,
+            classes=3,
         )
 
         model.load_state_dict(torch.load(model_path))
@@ -230,18 +241,18 @@ def get_seg_models():
 
 
 def get_det_models():
-    detModel1 = "/home/u1910100/GitHub/TIAger-Torch/runs/cell/fold_1/model_55.pth"
-    detModel2 = "/home/u1910100/GitHub/TIAger-Torch/runs/cell/fold_2/model_40.pth"
-    detModel3 = "/home/u1910100/GitHub/TIAger-Torch/runs/cell/fold_3/model_30.pth"
+    detModel1 = os.path.join(cell_model_dir, "cell_1.pth")
+    detModel2 = os.path.join(cell_model_dir, "cell_2.pth")
+    detModel3 = os.path.join(cell_model_dir, "cell_3.pth")
     detModel = [detModel1, detModel2, detModel3]
 
     models: list[torch.nn.Module] = []
     for model_path in detModel:
         model = smp.Unet(
-            encoder_name="efficientnet-b0",  # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-            encoder_weights=None,  # use `imagenet` pre-trained weights for encoder initialization
-            in_channels=3,  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
-            classes=1,  # model output channels (number of classes in your dataset)
+            encoder_name="efficientnet-b0",
+            encoder_weights=None,
+            in_channels=3,
+            classes=1,
         )
 
         model.load_state_dict(torch.load(model_path))
@@ -399,3 +410,40 @@ def get_tumor_stroma_mask(bulk_tumor_mask, stroma_mask):
 def is_l1(mask):
     count = np.count_nonzero(mask)
     return count < 50000
+
+
+def convert_tissue_masks_for_l1(
+    wsi_name_without_ext, tumor_mask_path, stroma_mask_path
+):
+    # Masks are at 5x resolution
+    tumor_mask = np.load(tumor_mask_path)
+    stroma_mask = np.load(stroma_mask_path)
+
+    combined_mask = np.zeros_like(tumor_mask)
+    combined_mask[np.where(tumor_mask == 1)] = 1
+    combined_mask[np.where(stroma_mask == 1)] = 2
+
+    mask_shape = combined_mask.shape
+    patch_extractor = SlidingWindowPatchExtractor(
+        input_img=combined_mask, patch_size=(512, 512)
+    )
+
+    tif_save_path = os.path.join(ChallengeConfig.seg_out_dir, f"segmentation.tif")
+    writer = WholeSlideMonochromeMaskWriter()
+    writer.write(
+        path=tif_save_path,
+        spacing=0.5,
+        dimensions=(mask_shape[1] * 4, mask_shape[0] * 4),
+        tile_shape=(512 * 4, 512 * 4),
+    )
+    for i, patch in enumerate(patch_extractor):
+        # mask =
+        mask = cv2.resize(
+            patch[:, :, 0], (512 * 4, 512 * 4), interpolation=cv2.INTER_NEAREST
+        ).astype("uint8")
+        x_start, y_start = (
+            patch_extractor.coordinate_list[i][0],
+            patch_extractor.coordinate_list[i][1],
+        )
+        writer.write_tile(tile=mask, coordinates=(int(x_start) * 4, int(y_start) * 4))
+    writer.save()

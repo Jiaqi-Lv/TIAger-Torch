@@ -1,9 +1,7 @@
 import os
 
-from tissue_masker_lite import get_mask
-
 from config import ChallengeConfig
-from detection_inference_torch import detection_process
+from detection_inference_torch import detection_process_l1
 from segmentation_inference_torch import tumor_stroma_process_l1
 from til_score import til_score_process
 
@@ -22,16 +20,12 @@ def segmentation_detection(wsi_name):
         print(f"{wsi_path} can not be found")
         return 0
 
-    # check if tissue mask exists:
-    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
-    if not os.path.exists(mask_path):
-        get_mask(wsi_path=wsi_path, save_dir=temp_out_dir, return_mask=False)
-
     tumor_stroma_process_l1(wsi_name=wsi_name)
-    detection_process(wsi_name=wsi_name)
+    # detection_process_l1(wsi_name=wsi_name)
     return 1
 
 
 if __name__ == "__main__":
-    wsi_name = "104S.tif"
-    segmentation_detection(wsi_name=wsi_name)
+    # wsi_name = "104S.tif"
+    slide_file = [x for x in os.listdir("/input") if x.endswith(".tif")][0]
+    segmentation_detection(wsi_name=slide_file)
