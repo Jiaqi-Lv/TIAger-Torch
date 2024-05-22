@@ -412,9 +412,10 @@ def is_l1(mask):
     return count < 50000
 
 
-def convert_tissue_masks_for_l1(
-    wsi_name_without_ext, tumor_mask_path, stroma_mask_path
-):
+def convert_tissue_masks_for_l1(mask_path, tumor_mask_path, stroma_mask_path):
+    mask_reader = WSIReader.open(mask_path)
+    mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
+
     # Masks are at 5x resolution
     tumor_mask = np.load(tumor_mask_path)
     stroma_mask = np.load(stroma_mask_path)
@@ -423,9 +424,13 @@ def convert_tissue_masks_for_l1(
     combined_mask[np.where(tumor_mask == 1)] = 1
     combined_mask[np.where(stroma_mask == 1)] = 2
 
+    combined_mask = combined_mask * mask
+
     mask_shape = combined_mask.shape
+
+    patch_size = 256
     patch_extractor = SlidingWindowPatchExtractor(
-        input_img=combined_mask, patch_size=(512, 512)
+        input_img=combined_mask, patch_size=(patch_size, patch_size)
     )
 
     tif_save_path = os.path.join(ChallengeConfig.seg_out_dir, f"segmentation.tif")
@@ -434,12 +439,14 @@ def convert_tissue_masks_for_l1(
         path=tif_save_path,
         spacing=0.5,
         dimensions=(mask_shape[1] * 4, mask_shape[0] * 4),
-        tile_shape=(512 * 4, 512 * 4),
+        tile_shape=(patch_size * 4, patch_size * 4),
     )
     for i, patch in enumerate(patch_extractor):
         # mask =
         mask = cv2.resize(
-            patch[:, :, 0], (512 * 4, 512 * 4), interpolation=cv2.INTER_NEAREST
+            patch[:, :, 0],
+            (patch_size * 4, patch_size * 4),
+            interpolation=cv2.INTER_NEAREST,
         ).astype("uint8")
         x_start, y_start = (
             patch_extractor.coordinate_list[i][0],
@@ -447,3 +454,13 @@ def convert_tissue_masks_for_l1(
         )
         writer.write_tile(tile=mask, coordinates=(int(x_start) * 4, int(y_start) * 4))
     writer.save()
+
+
+def check_coord_in_mask(x, y, mask):
+    """Checks if a given coordinate is inside the tissue mask
+    Coordinate (x, y)
+    Binary tissue mask at 5x
+    """
+    if mask is None:
+        return True
+    return mask[int(np.round(y)), int(np.round(x))] == 1

@@ -38,7 +38,7 @@ class Challenge_Config:
     def __init__(
         self,
         wsi_dir="/input",
-        output_dir="/output/",
+        output_dir="/output",
         model_dir=DEFAULT_MODEL_DIR,
     ) -> None:
         self.output_dir = output_dir
@@ -50,7 +50,7 @@ class Challenge_Config:
         )
         self.det_out_dir = self.output_dir
         self.output_tils_dir = self.output_dir
-        # self.create_dirs()
+        self.create_dirs()
 
         self.model_dir = model_dir
         self.cell_model_dir = os.path.join(self.model_dir, "cell/weights")

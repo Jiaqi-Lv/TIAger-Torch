@@ -13,9 +13,10 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from config import ChallengeConfig, DefaultConfig
-from utils import get_det_models, imagenet_normalise, is_l1, px_to_mm
+from utils import (check_coord_in_mask, get_det_models, imagenet_normalise,
+                   is_l1, px_to_mm)
 
-config = DefaultConfig
+config = ChallengeConfig
 output_dir = config.output_dir
 wsi_dir = config.wsi_dir
 temp_out_dir = config.temp_out_dir
@@ -64,7 +65,7 @@ def detections_in_tile(image_tile, det_models):
     return predictions, patch_extractor.coordinate_list
 
 
-def tile_detection_stats(predictions, coordinate_list, x, y):
+def tile_detection_stats(predictions, coordinate_list, x, y, tissue_mask=None):
     tile_prediction = SemanticSegmentor.merge_prediction(
         (1024, 1024), predictions, coordinate_list
     )
@@ -87,6 +88,10 @@ def tile_detection_stats(predictions, coordinate_list, x, y):
 
         c1 = c + x
         r1 = r + y
+
+        if not check_coord_in_mask(c1 // 4, r1 // 4, tissue_mask):
+            continue
+
         prediction_record = {
             "point": [
                 float(px_to_mm(c1, 0.5)),
@@ -164,7 +169,7 @@ def detection_process(wsi_name):
     print("Detection mask saved")
 
 
-def detection_process_l1(wsi_name):
+def detection_process_l1(wsi_name, mask_name):
     """For TIGER Challenge Leaderboard 1"""
     wsi_without_ext = os.path.splitext(wsi_name)[0]
     wsi_path = os.path.join(wsi_dir, wsi_name)
@@ -172,9 +177,9 @@ def detection_process_l1(wsi_name):
 
     # Load tissue mask
     print("Loading tissue mask")
-    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_tissue.tif")
+    mask_path = os.path.join(temp_out_dir, mask_name)
     mask_reader = WSIReader.open(mask_path)
-    input_mask = mask_reader.slide_thumbnail(resolution=0.3125, units="power")[:, :, 0]
+    input_mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
 
     models = get_det_models()
 
@@ -187,7 +192,6 @@ def detection_process_l1(wsi_name):
         resolution=20,
         units="power",
         input_mask=input_mask,
-        min_mask_ratio=0.5,
     )
     # Each tile of size 1024x1024
     annotations = []
@@ -205,7 +209,7 @@ def detection_process_l1(wsi_name):
         ]  # (x_start, y_start, x_end, y_end)
         predictions, coordinates = detections_in_tile(tile, models)
         annotations_tile, output_points_tile = tile_detection_stats(
-            predictions, coordinates, bounding_box[0], bounding_box[1]
+            predictions, coordinates, bounding_box[0], bounding_box[1], input_mask
         )
         annotations.extend(annotations_tile)
         output_dict["points"].extend(output_points_tile)

@@ -31,7 +31,7 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
         input_img=image,
         method_name="slidingwindow",
         patch_size=(512, 512),
-        stride=(384, 384),
+        stride=(256, 256),
         resolution=10,
         units="power",
         input_mask=mask,
@@ -83,6 +83,7 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
     tumor_mask = (tumor_mask > 0.5).astype(np.uint8)
     out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor.npy")
     np.save(out_path, tumor_mask[:, :, 0])
+    print(f"tumor mask saved at {out_path}")
 
     print("Merging stroma masks")
     stroma_mask = SemanticSegmentor.merge_prediction(
@@ -93,6 +94,7 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
     stroma_mask = (stroma_mask > 0.5).astype(np.uint8)
     out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_stroma.npy")
     np.save(out_path, stroma_mask[:, :, 0])
+    print(f"stroma mask saved at {out_path}")
 
     print(f"{wsi_without_ext} tumor stroma segmentation complete")
     return 1
@@ -136,22 +138,17 @@ def generate_bulk_tumor_stroma(wsi_without_ext):
     return 1
 
 
-def tumor_stroma_process_l1(wsi_name):
+def tumor_stroma_process_l1(wsi_name, mask_name):
     """For TIGER Challenge Leaderboard 1"""
 
     wsi_path = os.path.join(wsi_dir, wsi_name)
     wsi_without_ext = os.path.splitext(wsi_name)[0]
 
-    print(f"Processing {wsi_without_ext}")
-
-    seg_result_path = os.path.join(seg_out_dir, f"{wsi_without_ext}.tif")
-    if os.path.isfile(seg_result_path):
-        print(f"{wsi_without_ext} already processed")
-        return 1
+    print(f"Processing {wsi_name}")
 
     # Load tissue mask
     print("Loading tissue mask")
-    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_tissue.tif")
+    mask_path = os.path.join(temp_out_dir, mask_name)
     mask_reader = WSIReader.open(mask_path)
     mask = mask_reader.slide_thumbnail(resolution=0.3125, units="power")[:, :, 0]
     # print("Loading tissue mask")
@@ -166,7 +163,7 @@ def tumor_stroma_process_l1(wsi_name):
 
     tumor_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor.npy")
     stroma_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_stroma.npy")
-    convert_tissue_masks_for_l1(wsi_without_ext, tumor_mask_path, stroma_mask_path)
+    convert_tissue_masks_for_l1(mask_path, tumor_mask_path, stroma_mask_path)
     print("Segmentation mask saved as tif file")
     os.remove(tumor_mask_path)
     os.remove(stroma_mask_path)

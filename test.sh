@@ -24,7 +24,6 @@ docker run --rm \
         --shm-size=128m \
         --pids-limit=256 \
         --gpus all \
-        -v $SCRIPTPATH/testinput/:/input/ \
         -v tiger-output:/output/ \
         tiager_torch
 
@@ -39,3 +38,5 @@ docker run --rm \
 
 echo "Removing volume..."
 docker volume rm tiger-output
+
+echo "ok"

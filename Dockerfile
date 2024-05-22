@@ -55,8 +55,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 # folders and permissions
 RUN groupadd -r algorithm && useradd -m --no-log-init -r -g algorithm algorithm
 
-RUN mkdir -p /opt/algorithm /input /output
-RUN chown algorithm:algorithm /opt/algorithm /input /output
+RUN mkdir -p /opt/algorithm /input /output /output/images /output/images/breast-cancer-segmentation-for-tils
+RUN chown -R algorithm:algorithm /opt/algorithm /input /output
 
 USER algorithm
 WORKDIR /opt/algorithm
@@ -64,8 +64,7 @@ WORKDIR /opt/algorithm
 # RUN git clone -b docker https://github.com/Jiaqi-Lv/TIAger-Torch.git
 # RUN chmod -R 755 TIAger-Torch/
 COPY --chown=algorithm:algorithm ./ /opt/algorithm/TIAger-Torch
-COPY --chown=algorithm:algorithm testinput /input/
-COPY --chown=algorithm:algorithm testinput/images /input/images/
+# ADD --chown=algorithm:algorithm ./testinput /input/
 
 # Compute requirements
 LABEL processor.cpus="1"
@@ -76,4 +75,6 @@ LABEL processor.gpu.compute_capability="null"
 LABEL processor.gpu.memory="12G"
 
 WORKDIR /opt/algorithm/TIAger-Torch
-ENTRYPOINT python -u l1_pipeline.py
+# ENTRYPOINT python l1_pipeline.py
+RUN ["chmod", "+x", "./commands.sh"]
+ENTRYPOINT ["./commands.sh"]
