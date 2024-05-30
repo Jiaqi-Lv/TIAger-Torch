@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from multiprocessing import Pool
 
 import numpy as np
@@ -12,22 +13,15 @@ from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from config import ChallengeConfig, DefaultConfig
+from config import Challenge_Config, Config
 from utils import (check_coord_in_mask, get_det_models, imagenet_normalise,
                    is_l1, px_to_mm)
-
-config = ChallengeConfig
-output_dir = config.output_dir
-wsi_dir = config.wsi_dir
-temp_out_dir = config.temp_out_dir
-seg_out_dir = config.seg_out_dir
-det_out_dir = config.det_out_dir
 
 
 def detections_in_tile(image_tile, det_models):
     patch_size = 128
     stride = 100
-    tile_reader = VirtualWSIReader.open(image_tile, power=20.0, mpp=(0.5, 0.5))
+    tile_reader = VirtualWSIReader.open(image_tile, power=20.0)
 
     patch_extractor = get_patch_extractor(
         input_img=tile_reader,
@@ -65,7 +59,7 @@ def detections_in_tile(image_tile, det_models):
     return predictions, patch_extractor.coordinate_list
 
 
-def tile_detection_stats(predictions, coordinate_list, x, y, tissue_mask=None):
+def tile_detection_stats(predictions, coordinate_list, x, y, mpp, tissue_mask=None):
     tile_prediction = SemanticSegmentor.merge_prediction(
         (1024, 1024), predictions, coordinate_list
     )
@@ -94,8 +88,8 @@ def tile_detection_stats(predictions, coordinate_list, x, y, tissue_mask=None):
 
         prediction_record = {
             "point": [
-                float(px_to_mm(c1, 0.5)),
-                float(px_to_mm(r1, 0.5)),
+                float(px_to_mm(c1, mpp[0])),
+                float(px_to_mm(r1, mpp[1])),
                 float(0.5009999871253967),
             ],
             "probability": float(confidence),
@@ -169,21 +163,28 @@ def detection_process(wsi_name):
     print("Detection mask saved")
 
 
-def detection_process_l1(wsi_name, mask_name):
+def detection_process_l1(wsi_name, mask_name, IOConfig):
     """For TIGER Challenge Leaderboard 1"""
+
+    input_dir = IOConfig.input_dir
+    input_mask_dir = IOConfig.input_mask_dir
+    det_out_dir = IOConfig.det_out_dir
+    temp_out_dir = IOConfig.temp_out_dir
+
     wsi_without_ext = os.path.splitext(wsi_name)[0]
-    wsi_path = os.path.join(wsi_dir, wsi_name)
+    wsi_path = os.path.join(input_dir, wsi_name)
     print(f"Processing {wsi_path}")
 
     # Load tissue mask
     print("Loading tissue mask")
-    mask_path = os.path.join(temp_out_dir, mask_name)
+    mask_path = os.path.join(input_mask_dir, mask_name)
     mask_reader = WSIReader.open(mask_path)
     input_mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
 
-    models = get_det_models()
+    models = get_det_models(IOConfig)
 
     wsi = WSIReader.open(wsi_path)
+    mpp = wsi.info.as_dict()["mpp"]
 
     tile_extractor = get_patch_extractor(
         input_img=wsi,
@@ -209,18 +210,23 @@ def detection_process_l1(wsi_name, mask_name):
         ]  # (x_start, y_start, x_end, y_end)
         predictions, coordinates = detections_in_tile(tile, models)
         annotations_tile, output_points_tile = tile_detection_stats(
-            predictions, coordinates, bounding_box[0], bounding_box[1], input_mask
+            predictions, coordinates, bounding_box[0], bounding_box[1], mpp, input_mask
         )
         annotations.extend(annotations_tile)
         output_dict["points"].extend(output_points_tile)
 
-    output_path = os.path.join(det_out_dir, f"detected-lymphocytes.json")
-    with open(output_path, "w") as fp:
-        json.dump(output_dict, fp, indent=4)
+    with open(
+        os.path.join(temp_out_dir, f"detected-lymphocytes.json"), "w", encoding="utf-8"
+    ) as fp:
+        json.dump(output_dict, fp, ensure_ascii=False, indent=4)
 
-    # output_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
-    # with open(output_path, "w") as fp:
-    #     json.dump(annotations, fp, indent=4)
+    with open(os.path.join(temp_out_dir, f"{wsi_without_ext}_points.json"), "w") as fp:
+        json.dump(annotations, fp, indent=4)
+
+    shutil.copyfile(
+        os.path.join(temp_out_dir, f"detected-lymphocytes.json"),
+        os.path.join(det_out_dir, f"detected-lymphocytes.json"),
+    )
 
     print("Detection results saved")
 
@@ -237,4 +243,6 @@ if __name__ == "__main__":
     #     )
 
     wsi_name = "104S.tif"
-    detection_process(wsi_name)
+    mask_name = "104S_tissue.tif"
+    IOConfig = Challenge_Config()
+    detection_process_l1(wsi_name, mask_name, IOConfig)

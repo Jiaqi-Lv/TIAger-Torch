@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import shutil
 import sys
 import xml.etree.ElementTree as ET
 
@@ -22,11 +23,6 @@ from tiatoolbox.wsicore.wsireader import WSIReader
 sys.path.append("/opt/ASAP/bin")
 from wholeslidedata.interoperability.asap.imagewriter import \
     WholeSlideMonochromeMaskWriter
-
-from config import ChallengeConfig, DefaultConfig
-
-cell_model_dir = ChallengeConfig.cell_model_dir
-tissue_mdoel_dir = ChallengeConfig.tissue_model_dir
 
 
 def mm2_to_px(mm2, mpp):
@@ -217,10 +213,12 @@ def imagenet_normalise(img: torch.tensor) -> torch.tensor:
     return img
 
 
-def get_seg_models():
-    segModel1 = os.path.join(tissue_mdoel_dir, "tissue_1.pth")
-    segModel2 = os.path.join(tissue_mdoel_dir, "tissue_3.pth")
-    segModel3 = os.path.join(tissue_mdoel_dir, "tissue_4.pth")
+def get_seg_models(IOConfig):
+    tissue_model_dir = IOConfig.tissue_model_dir
+
+    segModel1 = os.path.join(tissue_model_dir, "tissue_1.pth")
+    segModel2 = os.path.join(tissue_model_dir, "tissue_3.pth")
+    segModel3 = os.path.join(tissue_model_dir, "tissue_4.pth")
     segModel = [segModel1, segModel2, segModel3]
 
     models: list[torch.nn.Module] = []
@@ -240,7 +238,8 @@ def get_seg_models():
     return models
 
 
-def get_det_models():
+def get_det_models(IOConfig):
+    cell_model_dir = IOConfig.cell_model_dir
     detModel1 = os.path.join(cell_model_dir, "cell_1.pth")
     detModel2 = os.path.join(cell_model_dir, "cell_2.pth")
     detModel3 = os.path.join(cell_model_dir, "cell_3.pth")
@@ -412,7 +411,9 @@ def is_l1(mask):
     return count < 50000
 
 
-def convert_tissue_masks_for_l1(mask_path, tumor_mask_path, stroma_mask_path):
+def convert_tissue_masks_for_l1(
+    mask_path, tumor_mask_path, stroma_mask_path, IOConfig, mpp
+):
     mask_reader = WSIReader.open(mask_path)
     mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
 
@@ -433,11 +434,11 @@ def convert_tissue_masks_for_l1(mask_path, tumor_mask_path, stroma_mask_path):
         input_img=combined_mask, patch_size=(patch_size, patch_size)
     )
 
-    tif_save_path = os.path.join(ChallengeConfig.seg_out_dir, f"segmentation.tif")
+    tif_save_path = os.path.join(IOConfig.temp_out_dir, f"segmentation.tif")
     writer = WholeSlideMonochromeMaskWriter()
     writer.write(
         path=tif_save_path,
-        spacing=0.5,
+        spacing=mpp[0],
         dimensions=(mask_shape[1] * 4, mask_shape[0] * 4),
         tile_shape=(patch_size * 4, patch_size * 4),
     )
@@ -454,6 +455,11 @@ def convert_tissue_masks_for_l1(mask_path, tumor_mask_path, stroma_mask_path):
         )
         writer.write_tile(tile=mask, coordinates=(int(x_start) * 4, int(y_start) * 4))
     writer.save()
+
+    shutil.copyfile(
+        os.path.join(IOConfig.temp_out_dir, f"segmentation.tif"),
+        os.path.join(IOConfig.seg_out_dir, f"segmentation.tif"),
+    )
 
 
 def check_coord_in_mask(x, y, mask):

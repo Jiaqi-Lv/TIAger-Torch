@@ -3,10 +3,9 @@ import os
 import numpy as np
 import segmentation_models_pytorch as smp
 import torch
+from data import TestDataset, TiagerDataset, TrainDataset
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-
-from data import TestDataset, TiagerDataset, TrainDataset
 
 
 def train_one_epoch(model, training_loader, optimizer, loss_fn):

@@ -11,9 +11,13 @@ MEMORY=32g
 echo "Building docker"
 ./build.sh
 
+echo "Removing volume..."
+docker volume rm tiger-output
+
 echo "Creating volume..."
 docker volume create tiger-output
 
+echo $SCRIPTPATH/testinput/
 echo "Running algorithm..."
 docker run --rm \
         --memory=$MEMORY \
@@ -34,7 +38,7 @@ docker run --rm \
         python -m json.tool $DETECTION_FILE; \
         /bin/bash; \
         [[ -f $SEGMENTATION_FILE ]] || printf 'Expected file %s does not exist!\n' "$SEGMENTATION_FILE"; \
-        # [[ -f $TILS_SCORE_FILE ]] || printf 'Expected file %s does not exist!\n' "$TILS_SCORE_FILE"; \
+        [[ -f $TILS_SCORE_FILE ]] || printf 'Expected file %s does not exist!\n' "$TILS_SCORE_FILE"; \
 
 echo "Removing volume..."
 docker volume rm tiger-output

@@ -10,20 +10,14 @@ from torch.utils.data import DataLoader
 from torchvision.transforms.v2.functional import resize
 from tqdm.auto import tqdm
 
-from config import ChallengeConfig, DefaultConfig
+from config import Challenge_Config, Config
 from utils import (calc_ratio, convert_tissue_masks_for_l1, dist_to_px,
                    get_bulk, get_seg_models, imagenet_normalise, is_l1)
 
-config = ChallengeConfig
 
-output_dir = config.output_dir
-wsi_dir = config.wsi_dir
-temp_out_dir = config.temp_out_dir
-seg_out_dir = config.seg_out_dir
-det_out_dir = config.det_out_dir
+def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):
+    temp_out_dir = IOConfig.temp_out_dir
 
-
-def tumor_stroma_segmentation(wsi_path, mask, models):
     wsi_without_ext = os.path.splitext(os.path.basename(wsi_path))[0]
     image = WSIReader.open(wsi_path)
 
@@ -67,8 +61,17 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
         # 1 -> tumor, 2-> stroma
         tumor_map[np.where(pred == 1)] = 1
         stroma_map[np.where(pred == 2)] = 1
+
         tumor_predictions.extend(list(tumor_map))
         stroma_predictions.extend(list(stroma_map))
+
+    for i in range(len(tumor_predictions)):
+        tumor_predictions[i] = cv2.morphologyEx(
+            tumor_predictions[i], cv2.MORPH_OPEN, np.ones((10, 10))
+        )
+        stroma_predictions[i] = cv2.morphologyEx(
+            stroma_predictions[i], cv2.MORPH_OPEN, np.ones((10, 10))
+        )
 
     print("Merging tumor masks")
 
@@ -81,7 +84,7 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
         down_coords,
     )
     tumor_mask = (tumor_mask > 0.5).astype(np.uint8)
-    out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor.npy")
+    out_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_tumor.npy")
     np.save(out_path, tumor_mask[:, :, 0])
     print(f"tumor mask saved at {out_path}")
 
@@ -92,7 +95,7 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
         down_coords,
     )
     stroma_mask = (stroma_mask > 0.5).astype(np.uint8)
-    out_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_stroma.npy")
+    out_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_stroma.npy")
     np.save(out_path, stroma_mask[:, :, 0])
     print(f"stroma mask saved at {out_path}")
 
@@ -100,9 +103,15 @@ def tumor_stroma_segmentation(wsi_path, mask, models):
     return 1
 
 
-def generate_bulk_tumor_stroma(wsi_without_ext):
-    tumor_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor.npy")
-    stroma_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_stroma.npy")
+def generate_bulk_tumor_stroma(wsi_without_ext, IOConfig):
+    output_dir = IOConfig.output_dir
+    input_dir = IOConfig.input_dir
+    temp_out_dir = IOConfig.temp_out_dir
+    seg_out_dir = IOConfig.seg_out_dir
+    det_out_dir = IOConfig.det_out_dir
+
+    tumor_mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_tumor.npy")
+    stroma_mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_stroma.npy")
     try:
         stroma_mask = np.load(stroma_mask_path)
         tumor_mask = np.load(tumor_mask_path)
@@ -138,43 +147,51 @@ def generate_bulk_tumor_stroma(wsi_without_ext):
     return 1
 
 
-def tumor_stroma_process_l1(wsi_name, mask_name):
+def tumor_stroma_process_l1(wsi_name, mask_name, IOConfig):
     """For TIGER Challenge Leaderboard 1"""
+    input_dir = IOConfig.input_dir
+    input_mask_dir = IOConfig.input_mask_dir
+    seg_out_dir = IOConfig.seg_out_dir
+    temp_out_dir = IOConfig.temp_out_dir
 
-    wsi_path = os.path.join(wsi_dir, wsi_name)
+    wsi_path = os.path.join(input_dir, wsi_name)
+    wsi_reader = WSIReader.open(wsi_path)
+    mpp = wsi_reader.info.as_dict()["mpp"]
+
     wsi_without_ext = os.path.splitext(wsi_name)[0]
 
     print(f"Processing {wsi_name}")
 
     # Load tissue mask
     print("Loading tissue mask")
-    mask_path = os.path.join(temp_out_dir, mask_name)
+    mask_path = os.path.join(input_mask_dir, mask_name)
     mask_reader = WSIReader.open(mask_path)
     mask = mask_reader.slide_thumbnail(resolution=0.3125, units="power")[:, :, 0]
-    # print("Loading tissue mask")
-    # mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
-    # mask = np.load(mask_path)[:, :, 0]
 
-    models = get_seg_models()
+    models = get_seg_models(IOConfig)
     print("Running tissue segmentation")
-    tumor_stroma_segmentation(wsi_path, mask, models)
+    tumor_stroma_segmentation(wsi_path, mask, models, IOConfig)
 
     print("Tissue segmentation complete")
 
-    tumor_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_tumor.npy")
-    stroma_mask_path = os.path.join(seg_out_dir, f"{wsi_without_ext}_stroma.npy")
-    convert_tissue_masks_for_l1(mask_path, tumor_mask_path, stroma_mask_path)
+    tumor_mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_tumor.npy")
+    stroma_mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_stroma.npy")
+    convert_tissue_masks_for_l1(
+        mask_path, tumor_mask_path, stroma_mask_path, IOConfig, mpp
+    )
     print("Segmentation mask saved as tif file")
-    os.remove(tumor_mask_path)
-    os.remove(stroma_mask_path)
     return 1
 
 
-def tumor_stroma_process(wsi_name):
+def tumor_stroma_process(wsi_name, IOConfig):
+    input_dir = IOConfig.input_dir
+    input_mask_dir = IOConfig.input_mask_dir
+    seg_out_dir = IOConfig.seg_out_dir
+
     if not os.path.exists(seg_out_dir):
         os.makedirs(seg_out_dir)
 
-    wsi_path = os.path.join(wsi_dir, wsi_name)
+    wsi_path = os.path.join(input_dir, wsi_name)
     wsi_without_ext = os.path.splitext(wsi_name)[0]
 
     print(f"Processing {wsi_without_ext}")
@@ -186,7 +203,7 @@ def tumor_stroma_process(wsi_name):
 
     # Generate tissue mask
     print("Loading tissue mask")
-    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
+    mask_path = os.path.join(input_mask_dir, f"{wsi_without_ext}.npy")
     mask = np.load(mask_path)[:, :, 0]
 
     if is_l1(mask):
@@ -209,6 +226,7 @@ if __name__ == "__main__":
     # wsi_name_list = os.listdir(wsi_dir)
     # for wsi_name in tqdm(wsi_name_list):
     #     tumor_stroma_process(wsi_name)
-
+    IOConfig = Challenge_Config()
     wsi_name = "104S.tif"
-    tumor_stroma_process_l1(wsi_name=wsi_name)
+    mask_name = "104S_tissue.tif"
+    tumor_stroma_process_l1(wsi_name, mask_name, IOConfig)

@@ -6,15 +6,8 @@ import numpy as np
 from tiatoolbox.wsicore.wsireader import VirtualWSIReader
 from tqdm.auto import tqdm
 
-from config import DefaultConfig
+from config import Challenge_Config, Config
 from utils import create_til_score, is_l1
-
-output_dir = DefaultConfig.output_dir
-wsi_dir = DefaultConfig.wsi_dir
-temp_out_dir = DefaultConfig.temp_out_dir
-seg_out_dir = DefaultConfig.seg_out_dir
-det_out_dir = DefaultConfig.det_out_dir
-output_tils_dir = DefaultConfig.output_tils_dir
 
 
 def til_score_process(wsi_name):

@@ -3,10 +3,10 @@ import os
 import numpy as np
 import segmentation_models_pytorch as smp
 import torch
-from torch.utils.data import ConcatDataset, DataLoader, random_split
-
 from data import TestDataset, TiagerDataset, TrainDataset
 from loss_functions import BCE_Dice_Loss
+from torch.utils.data import ConcatDataset, DataLoader, random_split
+
 from train import train_model
 
 BATCH_SIZE = 8

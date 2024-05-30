@@ -55,8 +55,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 # folders and permissions
 RUN groupadd -r algorithm && useradd -m --no-log-init -r -g algorithm algorithm
 
-RUN mkdir -p /opt/algorithm /input /output /output/images /output/images/breast-cancer-segmentation-for-tils
-RUN chown -R algorithm:algorithm /opt/algorithm /input /output
+RUN mkdir -p /opt/algorithm /tempoutput /input /output /output/images /output/images/breast-cancer-segmentation-for-tils
+RUN chown -R algorithm:algorithm /opt/algorithm /input /output /tempoutput
 
 USER algorithm
 WORKDIR /opt/algorithm
