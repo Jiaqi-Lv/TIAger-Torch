@@ -17,12 +17,9 @@ def segmentation_detection(wsi_name, mask_name, IOConfig):
     output_tils_path = os.path.join(IOConfig.temp_out_dir, "til-score.json")
     with open(output_tils_path, "w") as file:
         file.write(str(score))
-
-    shutil.copyfile(
-        output_tils_path, os.path.join(IOConfig.output_tils_dir, "til-score.json")
-    )
-
-    print("TIL score saved")
+    final_path = os.path.join(IOConfig.output_tils_dir, "til-score.json")
+    shutil.copyfile(output_tils_path, final_path)
+    print(f"TIL score saved at {final_path}")
 
     print("Process complete")
     return 1
@@ -33,6 +30,7 @@ if __name__ == "__main__":
     IOConfig = Challenge_Config(
         input_dir="/input", output_dir="/output", temp_out_dir="/tempoutput"
     )
+    IOConfig.create_output_dirs()
     wsi_name = [x for x in os.listdir(IOConfig.input_dir) if x.endswith(".tif")][0]
     mask_name = [x for x in os.listdir(IOConfig.input_mask_dir) if x.endswith(".tif")][
         0

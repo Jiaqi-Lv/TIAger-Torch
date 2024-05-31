@@ -223,12 +223,13 @@ def detection_process_l1(wsi_name, mask_name, IOConfig):
     with open(os.path.join(temp_out_dir, f"{wsi_without_ext}_points.json"), "w") as fp:
         json.dump(annotations, fp, indent=4)
 
+    final_path = os.path.join(det_out_dir, f"detected-lymphocytes.json")
     shutil.copyfile(
         os.path.join(temp_out_dir, f"detected-lymphocytes.json"),
-        os.path.join(det_out_dir, f"detected-lymphocytes.json"),
+        final_path,
     )
 
-    print("Detection results saved")
+    print(f"Detection saved at {final_path}")
 
 
 if __name__ == "__main__":

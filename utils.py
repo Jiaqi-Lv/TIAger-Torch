@@ -456,10 +456,12 @@ def convert_tissue_masks_for_l1(
         writer.write_tile(tile=mask, coordinates=(int(x_start) * 4, int(y_start) * 4))
     writer.save()
 
+    final_path = os.path.join(IOConfig.seg_out_dir, f"segmentation.tif")
     shutil.copyfile(
         os.path.join(IOConfig.temp_out_dir, f"segmentation.tif"),
-        os.path.join(IOConfig.seg_out_dir, f"segmentation.tif"),
+        final_path,
     )
+    print(f"Segmentation saved at {final_path}")
 
 
 def check_coord_in_mask(x, y, mask):

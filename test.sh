@@ -32,13 +32,16 @@ docker run --rm \
         tiager_torch
 
 echo "Checking output files..."
-docker run --rm \
-        -v tiger-output:/output/ \
+docker run --rm -v tiger-output:/output/ \
+        -e DETECTION_FILE=$DETECTION_FILE \
+        -e SEGMENTATION_FILE=$SEGMENTATION_FILE \
+        -e TILS_SCORE_FILE=$TILS_SCORE_FILE \
         python:3.11 \
-        python -m json.tool $DETECTION_FILE; \
-        /bin/bash; \
-        [[ -f $SEGMENTATION_FILE ]] || printf 'Expected file %s does not exist!\n' "$SEGMENTATION_FILE"; \
-        [[ -f $TILS_SCORE_FILE ]] || printf 'Expected file %s does not exist!\n' "$TILS_SCORE_FILE"; \
+        /bin/bash -c "\
+        python -m json.tool \$DETECTION_FILE; \
+        [[ -f \$SEGMENTATION_FILE ]] || printf 'Expected file %s does not exist!\n' \"\$SEGMENTATION_FILE\"; \
+        [[ -f \$TILS_SCORE_FILE ]] || printf 'Expected file %s does not exist!\n' \"\$TILS_SCORE_FILE\"; \
+        "
 
 echo "Removing volume..."
 docker volume rm tiger-output
