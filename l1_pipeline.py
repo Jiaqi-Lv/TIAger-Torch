@@ -5,7 +5,8 @@ import shutil
 from config import Challenge_Config
 from detection_inference_torch import detection_process_l1
 from segmentation_inference_torch import tumor_stroma_process_l1
-from til_score import til_score_process
+
+# from til_score import til_score_process
 
 
 def segmentation_detection(wsi_name, mask_name, IOConfig):

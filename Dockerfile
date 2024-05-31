@@ -1,4 +1,8 @@
-FROM ubuntu:22.04 AS builder-image
+# FROM ubuntu:22.04 AS builder-image
+FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
+
+ENV TZ=Europe/Amsterdam
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # To avoid tzdata blocking the build with frontend questions
 ENV DEBIAN_FRONTEND=noninteractive
