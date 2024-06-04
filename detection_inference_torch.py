@@ -14,8 +14,8 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from config import Challenge_Config, Config
-from utils import (check_coord_in_mask, get_det_models, imagenet_normalise,
-                   is_l1, px_to_mm)
+from utils import (check_coord_in_mask, get_det_models, get_mask_with_asap,
+                   imagenet_normalise, is_l1, px_to_mm)
 
 
 def detections_in_tile(image_tile, det_models):
@@ -178,8 +178,9 @@ def detection_process_l1(wsi_name, mask_name, IOConfig):
     # Load tissue mask
     print("Loading tissue mask")
     mask_path = os.path.join(input_mask_dir, mask_name)
-    mask_reader = WSIReader.open(mask_path)
-    input_mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
+    # mask_reader = WSIReader.open(mask_path)
+    # input_mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
+    input_mask = get_mask_with_asap(mask_path=mask_path, mpp=2)
 
     models = get_det_models(IOConfig)
 

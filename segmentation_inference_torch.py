@@ -12,7 +12,8 @@ from tqdm.auto import tqdm
 
 from config import Challenge_Config, Config
 from utils import (calc_ratio, convert_tissue_masks_for_l1, dist_to_px,
-                   get_bulk, get_seg_models, imagenet_normalise, is_l1)
+                   get_bulk, get_mask_with_asap, get_seg_models,
+                   imagenet_normalise, is_l1)
 
 
 def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):
@@ -165,8 +166,9 @@ def tumor_stroma_process_l1(wsi_name, mask_name, IOConfig):
     # Load tissue mask
     print("Loading tissue mask")
     mask_path = os.path.join(input_mask_dir, mask_name)
-    mask_reader = WSIReader.open(mask_path)
-    mask = mask_reader.slide_thumbnail(resolution=0.3125, units="power")[:, :, 0]
+    # mask_reader = WSIReader.open(mask_path)
+    # mask = mask_reader.slide_thumbnail(resolution=0.3125, units="power")[:, :, 0]
+    mask = get_mask_with_asap(mask_path=mask_path, mpp=2)
 
     models = get_seg_models(IOConfig)
     print("Running tissue segmentation")

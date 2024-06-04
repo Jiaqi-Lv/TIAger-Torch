@@ -21,6 +21,9 @@ from tiatoolbox.tools.patchextraction import SlidingWindowPatchExtractor
 from tiatoolbox.wsicore.wsireader import WSIReader
 
 sys.path.append("/opt/ASAP/bin")
+from wholeslidedata import WholeSlideImage
+from wholeslidedata.interoperability.asap.backend import \
+    AsapWholeSlideImageBackend
 from wholeslidedata.interoperability.asap.imagewriter import \
     WholeSlideMonochromeMaskWriter
 
@@ -414,8 +417,9 @@ def is_l1(mask):
 def convert_tissue_masks_for_l1(
     mask_path, tumor_mask_path, stroma_mask_path, IOConfig, mpp
 ):
-    mask_reader = WSIReader.open(mask_path)
-    mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
+    # mask_reader = WSIReader.open(mask_path)
+    # mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
+    mask = get_mask_with_asap(mask_path=mask_path, mpp=2)
 
     # Masks are at 5x resolution
     tumor_mask = np.load(tumor_mask_path)
@@ -443,7 +447,6 @@ def convert_tissue_masks_for_l1(
         tile_shape=(patch_size * 4, patch_size * 4),
     )
     for i, patch in enumerate(patch_extractor):
-        # mask =
         mask = cv2.resize(
             patch[:, :, 0],
             (patch_size * 4, patch_size * 4),
@@ -472,3 +475,9 @@ def check_coord_in_mask(x, y, mask):
     if mask is None:
         return True
     return mask[int(np.round(y)), int(np.round(x))] == 1
+
+
+def get_mask_with_asap(mask_path, mpp):
+    mask_reader = WholeSlideImage(mask_path, backend=AsapWholeSlideImageBackend)
+    mask_thumb = mask_reader.get_slide(spacing=mpp)
+    return mask_thumb[:, :, 0]
