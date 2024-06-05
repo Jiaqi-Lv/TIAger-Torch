@@ -467,16 +467,22 @@ def convert_tissue_masks_for_l1(
         tile_shape=(patch_size * 4, patch_size * 4),
     )
     for i, patch in enumerate(patch_extractor):
-        mask = cv2.resize(
-            patch[:, :, 0],
-            (patch_size * 4, patch_size * 4),
-            interpolation=cv2.INTER_NEAREST,
-        ).astype("uint8")
-        x_start, y_start = (
-            patch_extractor.coordinate_list[i][0],
-            patch_extractor.coordinate_list[i][1],
-        )
-        writer.write_tile(tile=mask, coordinates=(int(x_start) * 4, int(y_start) * 4))
+        try:
+            mask = cv2.resize(
+                patch[:, :, 0],
+                (patch_size * 4, patch_size * 4),
+                interpolation=cv2.INTER_NEAREST,
+            ).astype("uint8")
+            x_start, y_start = (
+                patch_extractor.coordinate_list[i][0],
+                patch_extractor.coordinate_list[i][1],
+            )
+            writer.write_tile(
+                tile=mask, coordinates=(int(x_start) * 4, int(y_start) * 4)
+            )
+        except Exception as error:
+            print(error)
+            continue
     writer.save()
 
     final_path = os.path.join(IOConfig.seg_out_dir, f"segmentation.tif")
