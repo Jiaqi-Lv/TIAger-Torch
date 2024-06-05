@@ -68,7 +68,7 @@ WORKDIR /opt/algorithm
 # RUN git clone -b docker https://github.com/Jiaqi-Lv/TIAger-Torch.git
 # RUN chmod -R 755 TIAger-Torch/
 COPY --chown=algorithm:algorithm ./ /opt/algorithm/TIAger-Torch
-ADD --chown=algorithm:algorithm ./testinput /input/
+# ADD --chown=algorithm:algorithm ./testinput /input/
 
 # Compute requirements
 LABEL processor.cpus="1"
