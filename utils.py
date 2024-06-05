@@ -1,3 +1,4 @@
+import copy
 import json
 import math
 import os
@@ -22,10 +23,18 @@ from tiatoolbox.wsicore.wsireader import WSIReader
 
 sys.path.append("/opt/ASAP/bin")
 from wholeslidedata import WholeSlideImage
-from wholeslidedata.interoperability.asap.backend import \
-    AsapWholeSlideImageBackend
-from wholeslidedata.interoperability.asap.imagewriter import \
-    WholeSlideMonochromeMaskWriter
+from wholeslidedata.interoperability.asap.backend import AsapWholeSlideImageBackend
+from wholeslidedata.interoperability.asap.imagewriter import (
+    WholeSlideMonochromeMaskWriter,
+)
+
+
+def collate_fn(batch):
+    # Apply the make_writable function to each element in the batch
+    batch = np.asarray(batch)
+    writable_batch = batch.copy()
+    # Convert each element to a tensor
+    return torch.as_tensor(writable_batch, dtype=torch.float)
 
 
 def mm2_to_px(mm2, mpp):
@@ -415,13 +424,15 @@ def is_l1(mask):
 
 
 def convert_tissue_masks_for_l1(
-    mask_path, tumor_mask_path, stroma_mask_path, IOConfig, mpp
+    mask_path, tumor_mask_path, stroma_mask_path, IOConfig, mpp_info
 ):
-    # mask_reader = WSIReader.open(mask_path)
-    # mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
-    mask = get_mask_with_asap(mask_path=mask_path, mpp=2)
+    # Read tissue mask at level 2 == 5x power
+    _mpp = get_mpp_from_level(mask_path, 2)  # mpp at level 2 == 5x power
+    mask = get_mask_with_asap(mask_path=mask_path, mpp=_mpp)
 
-    # Masks are at 5x resolution
+    base_dimension = get_slide_base_dimension(mask_path)
+
+    # Masks are at level 2
     tumor_mask = np.load(tumor_mask_path)
     stroma_mask = np.load(stroma_mask_path)
 
@@ -429,9 +440,15 @@ def convert_tissue_masks_for_l1(
     combined_mask[np.where(tumor_mask == 1)] = 1
     combined_mask[np.where(stroma_mask == 1)] = 2
 
-    combined_mask = combined_mask * mask
+    if not (combined_mask.shape == mask.shape):
+        combined_mask = cv2.resize(
+            combined_mask,
+            (mask.shape[1], mask.shape[0]),
+            interpolation=cv2.INTER_NEAREST,
+        ).astype("uint8")
 
-    mask_shape = combined_mask.shape
+    # ValueError: operands could not be broadcast together with shapes (5468,5950) (5468,5949)
+    combined_mask = combined_mask * mask
 
     patch_size = 256
     patch_extractor = SlidingWindowPatchExtractor(
@@ -442,8 +459,8 @@ def convert_tissue_masks_for_l1(
     writer = WholeSlideMonochromeMaskWriter()
     writer.write(
         path=tif_save_path,
-        spacing=mpp[0],
-        dimensions=(mask_shape[1] * 4, mask_shape[0] * 4),
+        spacing=mpp_info[0],
+        dimensions=(base_dimension[1], base_dimension[0]),
         tile_shape=(patch_size * 4, patch_size * 4),
     )
     for i, patch in enumerate(patch_extractor):
@@ -481,3 +498,21 @@ def get_mask_with_asap(mask_path, mpp):
     mask_reader = WholeSlideImage(mask_path, backend=AsapWholeSlideImageBackend)
     mask_thumb = mask_reader.get_slide(spacing=mpp)
     return mask_thumb[:, :, 0]
+
+
+def get_mpp_from_level(wsi_path, level):
+    wsi_reader = WholeSlideImage(wsi_path, backend=AsapWholeSlideImageBackend)
+    try:
+        mpp = wsi_reader.spacings[level]
+    except IndexError:
+        print(f"Downsampling level {level} does not exist")
+        print("Using mpp = 2")
+        mpp = 2
+    return mpp
+
+
+def get_slide_base_dimension(wsi_path):
+    """Returns (width, height)"""
+    wsi_reader = WholeSlideImage(wsi_path, backend=AsapWholeSlideImageBackend)
+    shape = wsi_reader.shapes[0]
+    return (shape[1], shape[0])

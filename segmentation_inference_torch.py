@@ -5,15 +5,24 @@ import numpy as np
 import torch
 from tiatoolbox.models.engine.semantic_segmentor import SemanticSegmentor
 from tiatoolbox.tools.patchextraction import get_patch_extractor
-from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
+from tiatoolbox.wsicore.wsireader import WSIReader
 from torch.utils.data import DataLoader
 from torchvision.transforms.v2.functional import resize
 from tqdm.auto import tqdm
 
 from config import Challenge_Config, Config
-from utils import (calc_ratio, convert_tissue_masks_for_l1, dist_to_px,
-                   get_bulk, get_mask_with_asap, get_seg_models,
-                   imagenet_normalise, is_l1)
+from utils import (
+    calc_ratio,
+    collate_fn,
+    convert_tissue_masks_for_l1,
+    dist_to_px,
+    get_bulk,
+    get_mask_with_asap,
+    get_mpp_from_level,
+    get_seg_models,
+    imagenet_normalise,
+    is_l1,
+)
 
 
 def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):
@@ -22,13 +31,15 @@ def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):
     wsi_without_ext = os.path.splitext(os.path.basename(wsi_path))[0]
     image = WSIReader.open(wsi_path)
 
+    _mpp = get_mpp_from_level(wsi_path, 1)  # mpp at level 1 == 10x power
+
     patch_extractor = get_patch_extractor(
         input_img=image,
         method_name="slidingwindow",
         patch_size=(512, 512),
         stride=(256, 256),
-        resolution=10,
-        units="power",
+        resolution=_mpp,
+        units="mpp",
         input_mask=mask,
         min_mask_ratio=0.3,
     )
@@ -37,7 +48,9 @@ def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):
     stroma_predictions: list[np.ndarray] = []
 
     batch_size = 16
-    dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
+    dataloader = DataLoader(
+        patch_extractor, batch_size=batch_size, shuffle=False, collate_fn=collate_fn
+    )
 
     for i, imgs in enumerate(tqdm(dataloader, leave=False)):
         imgs = torch.permute(imgs, (0, 3, 1, 2))
@@ -76,8 +89,11 @@ def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):
 
     print("Merging tumor masks")
 
-    down_dimensions = image.slide_dimensions(resolution=5, units="power")
-    down_coords = [coords // 2 for coords in patch_extractor.coordinate_list]
+    _mpp = get_mpp_from_level(wsi_path, 2)  # mpp at level 2 == 5x power
+    down_dimensions = image.slide_dimensions(resolution=_mpp, units="mpp")
+    # down_coords = [coords // 2 for coords in patch_extractor.coordinate_list]
+    down_coords = patch_extractor.coordinate_list / 2
+    down_coords = np.round(down_coords).astype(int)
 
     tumor_mask = SemanticSegmentor.merge_prediction(
         (down_dimensions[1], down_dimensions[0]),
@@ -157,7 +173,7 @@ def tumor_stroma_process_l1(wsi_name, mask_name, IOConfig):
 
     wsi_path = os.path.join(input_dir, wsi_name)
     wsi_reader = WSIReader.open(wsi_path)
-    mpp = wsi_reader.info.as_dict()["mpp"]
+    mpp_info = wsi_reader.info.as_dict()["mpp"]
 
     wsi_without_ext = os.path.splitext(wsi_name)[0]
 
@@ -168,7 +184,9 @@ def tumor_stroma_process_l1(wsi_name, mask_name, IOConfig):
     mask_path = os.path.join(input_mask_dir, mask_name)
     # mask_reader = WSIReader.open(mask_path)
     # mask = mask_reader.slide_thumbnail(resolution=0.3125, units="power")[:, :, 0]
-    mask = get_mask_with_asap(mask_path=mask_path, mpp=2)
+
+    _mpp = get_mpp_from_level(mask_path, 2)  # mpp at level 2 == 5x power
+    mask = get_mask_with_asap(mask_path=mask_path, mpp=_mpp)
 
     models = get_seg_models(IOConfig)
     print("Running tissue segmentation")
@@ -179,7 +197,7 @@ def tumor_stroma_process_l1(wsi_name, mask_name, IOConfig):
     tumor_mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_tumor.npy")
     stroma_mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_stroma.npy")
     convert_tissue_masks_for_l1(
-        mask_path, tumor_mask_path, stroma_mask_path, IOConfig, mpp
+        mask_path, tumor_mask_path, stroma_mask_path, IOConfig, mpp_info
     )
     print("Segmentation mask saved as tif file")
     return 1

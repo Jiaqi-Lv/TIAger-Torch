@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 
@@ -31,6 +30,7 @@ if __name__ == "__main__":
     IOConfig = Challenge_Config(
         input_dir="/input", output_dir="/output", temp_out_dir="/tempoutput"
     )
+    # IOConfig = Challenge_Config()
     IOConfig.create_output_dirs()
     wsi_name = [x for x in os.listdir(IOConfig.input_dir) if x.endswith(".tif")][0]
     mask_name = [x for x in os.listdir(IOConfig.input_mask_dir) if x.endswith(".tif")][

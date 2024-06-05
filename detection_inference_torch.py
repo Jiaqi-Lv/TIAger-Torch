@@ -14,28 +14,38 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from config import Challenge_Config, Config
-from utils import (check_coord_in_mask, get_det_models, get_mask_with_asap,
-                   imagenet_normalise, is_l1, px_to_mm)
+from utils import (
+    check_coord_in_mask,
+    collate_fn,
+    get_det_models,
+    get_mask_with_asap,
+    get_mpp_from_level,
+    imagenet_normalise,
+    is_l1,
+    px_to_mm,
+)
 
 
 def detections_in_tile(image_tile, det_models):
     patch_size = 128
     stride = 100
-    tile_reader = VirtualWSIReader.open(image_tile, power=20.0)
+    tile_reader = VirtualWSIReader.open(image_tile)
 
     patch_extractor = get_patch_extractor(
         input_img=tile_reader,
         method_name="slidingwindow",
         patch_size=(patch_size, patch_size),
         stride=(stride, stride),
-        resolution=20,
-        units="power",
+        resolution=0,
+        units="level",
     )
 
     predictions = []
     batch_size = 32
 
-    dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
+    dataloader = DataLoader(
+        patch_extractor, batch_size=batch_size, shuffle=False, collate_fn=collate_fn
+    )
 
     for i, imgs in enumerate(dataloader):
         imgs = torch.permute(imgs, (0, 3, 1, 2))
@@ -83,7 +93,7 @@ def tile_detection_stats(predictions, coordinate_list, x, y, mpp, tissue_mask=No
         c1 = c + x
         r1 = r + y
 
-        if not check_coord_in_mask(c1 // 4, r1 // 4, tissue_mask):
+        if not check_coord_in_mask(round(c1 / 4), round(r1 / 4), tissue_mask):
             continue
 
         prediction_record = {
@@ -180,19 +190,20 @@ def detection_process_l1(wsi_name, mask_name, IOConfig):
     mask_path = os.path.join(input_mask_dir, mask_name)
     # mask_reader = WSIReader.open(mask_path)
     # input_mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
-    input_mask = get_mask_with_asap(mask_path=mask_path, mpp=2)
+    _mpp = get_mpp_from_level(mask_path, 2)  # mpp at level 2 == 5x power
+    input_mask = get_mask_with_asap(mask_path=mask_path, mpp=_mpp)
 
     models = get_det_models(IOConfig)
 
     wsi = WSIReader.open(wsi_path)
-    mpp = wsi.info.as_dict()["mpp"]
+    mpp_info = wsi.info.as_dict()["mpp"]
 
     tile_extractor = get_patch_extractor(
         input_img=wsi,
         method_name="slidingwindow",
         patch_size=(1024, 1024),
-        resolution=20,
-        units="power",
+        resolution=0,
+        units="level",
         input_mask=input_mask,
     )
     # Each tile of size 1024x1024
@@ -211,7 +222,12 @@ def detection_process_l1(wsi_name, mask_name, IOConfig):
         ]  # (x_start, y_start, x_end, y_end)
         predictions, coordinates = detections_in_tile(tile, models)
         annotations_tile, output_points_tile = tile_detection_stats(
-            predictions, coordinates, bounding_box[0], bounding_box[1], mpp, input_mask
+            predictions,
+            coordinates,
+            bounding_box[0],
+            bounding_box[1],
+            mpp_info,
+            input_mask,
         )
         annotations.extend(annotations_tile)
         output_dict["points"].extend(output_points_tile)
