@@ -23,10 +23,10 @@ from tiatoolbox.wsicore.wsireader import WSIReader
 
 sys.path.append("/opt/ASAP/bin")
 from wholeslidedata import WholeSlideImage
-from wholeslidedata.interoperability.asap.backend import AsapWholeSlideImageBackend
-from wholeslidedata.interoperability.asap.imagewriter import (
-    WholeSlideMonochromeMaskWriter,
-)
+from wholeslidedata.interoperability.asap.backend import \
+    AsapWholeSlideImageBackend
+from wholeslidedata.interoperability.asap.imagewriter import \
+    WholeSlideMonochromeMaskWriter
 
 
 def collate_fn(batch):
@@ -452,7 +452,10 @@ def convert_tissue_masks_for_l1(
 
     patch_size = 256
     patch_extractor = SlidingWindowPatchExtractor(
-        input_img=combined_mask, patch_size=(patch_size, patch_size)
+        input_img=combined_mask,
+        patch_size=(patch_size, patch_size),
+        input_mask=mask,
+        within_bound=True,
     )
 
     tif_save_path = os.path.join(IOConfig.temp_out_dir, f"segmentation.tif")
