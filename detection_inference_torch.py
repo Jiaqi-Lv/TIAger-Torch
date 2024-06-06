@@ -3,6 +3,7 @@ import os
 import shutil
 from multiprocessing import Pool
 
+import cv2
 import numpy as np
 import skimage
 import skimage.measure
@@ -14,9 +15,16 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from config import Challenge_Config, Config
-from utils import (check_coord_in_mask, collate_fn, get_det_models,
-                   get_mask_with_asap, get_mpp_from_level, imagenet_normalise,
-                   is_l1, px_to_mm)
+from utils import (
+    check_coord_in_mask,
+    collate_fn,
+    get_det_models,
+    get_mask_with_asap,
+    get_mpp_from_level,
+    imagenet_normalise,
+    is_l1,
+    px_to_mm,
+)
 
 
 def detections_in_tile(image_tile, det_models):
@@ -63,9 +71,12 @@ def detections_in_tile(image_tile, det_models):
 
 
 def tile_detection_stats(predictions, coordinate_list, x, y, mpp, tissue_mask=None):
-    tile_prediction = SemanticSegmentor.merge_prediction(
-        (1024, 1024), predictions, coordinate_list
-    )
+    if len(predictions) == 0:
+        tile_prediction = np.zeros(shape=(1024, 1024), dtype=np.uint8)
+    else:
+        tile_prediction = SemanticSegmentor.merge_prediction(
+            (1024, 1024), predictions, coordinate_list
+        )
     threshold = 0.99
     tile_prediction_mask = tile_prediction > threshold
 
@@ -82,6 +93,11 @@ def tile_detection_stats(predictions, coordinate_list, x, y, mpp, tissue_mask=No
             centroid[0],
             region["mean_intensity"],
         )
+
+        if confidence >= 1.0:
+            confidence = 0.99
+        if confidence <= 0.0:
+            confidence = 0.01
 
         c1 = c + x
         r1 = r + y
@@ -190,6 +206,13 @@ def detection_process_l1(wsi_name, mask_name, IOConfig):
 
     wsi = WSIReader.open(wsi_path)
     mpp_info = wsi.info.as_dict()["mpp"]
+
+    toolbox_dim = wsi.slide_dimensions(_mpp, "mpp")
+    input_mask = cv2.resize(
+        input_mask,
+        (toolbox_dim[0], toolbox_dim[1]),
+        interpolation=cv2.INTER_NEAREST,
+    ).astype("uint8")
 
     tile_extractor = get_patch_extractor(
         input_img=wsi,

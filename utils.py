@@ -23,10 +23,10 @@ from tiatoolbox.wsicore.wsireader import WSIReader
 
 sys.path.append("/opt/ASAP/bin")
 from wholeslidedata import WholeSlideImage
-from wholeslidedata.interoperability.asap.backend import \
-    AsapWholeSlideImageBackend
-from wholeslidedata.interoperability.asap.imagewriter import \
-    WholeSlideMonochromeMaskWriter
+from wholeslidedata.interoperability.asap.backend import AsapWholeSlideImageBackend
+from wholeslidedata.interoperability.asap.imagewriter import (
+    WholeSlideMonochromeMaskWriter,
+)
 
 
 def collate_fn(batch):
@@ -439,6 +439,7 @@ def convert_tissue_masks_for_l1(
     combined_mask = np.zeros_like(tumor_mask)
     combined_mask[np.where(tumor_mask == 1)] = 1
     combined_mask[np.where(stroma_mask == 1)] = 2
+    combined_mask = combined_mask.astype(np.uint8)
 
     if not (combined_mask.shape == mask.shape):
         combined_mask = cv2.resize(
@@ -500,12 +501,17 @@ def check_coord_in_mask(x, y, mask):
     """
     if mask is None:
         return True
-    return mask[int(np.round(y)), int(np.round(x))] == 1
+
+    try:
+        return mask[int(np.round(y)), int(np.round(x))] == 1
+    except IndexError:
+        return False
 
 
 def get_mask_with_asap(mask_path, mpp):
     mask_reader = WholeSlideImage(mask_path, backend=AsapWholeSlideImageBackend)
     mask_thumb = mask_reader.get_slide(spacing=mpp)
+    mask_thumb = mask_thumb.astype(np.uint8)
     return mask_thumb[:, :, 0]
 
 
