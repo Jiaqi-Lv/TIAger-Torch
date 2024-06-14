@@ -23,10 +23,10 @@ from tiatoolbox.wsicore.wsireader import WSIReader
 
 sys.path.append("/opt/ASAP/bin")
 from wholeslidedata import WholeSlideImage
-from wholeslidedata.interoperability.asap.backend import AsapWholeSlideImageBackend
-from wholeslidedata.interoperability.asap.imagewriter import (
-    WholeSlideMonochromeMaskWriter,
-)
+from wholeslidedata.interoperability.asap.backend import \
+    AsapWholeSlideImageBackend
+from wholeslidedata.interoperability.asap.imagewriter import \
+    WholeSlideMonochromeMaskWriter
 
 
 def collate_fn(batch):

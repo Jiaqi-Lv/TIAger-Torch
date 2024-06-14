@@ -61,6 +61,12 @@ class TiagerDataset(Dataset):
     def __len__(self):
         return self.total
 
+    def smooth_mask(self, mask):
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (8, 8))
+        closing = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)
+        return opening
+
     def merge_labels(self, mask):
         mask[mask == 3] = 0
         mask[mask == 4] = 0
@@ -75,29 +81,13 @@ class TiagerDataset(Dataset):
         img = img_file[:, :, 0:3]
         mask = img_file[:, :, 3]
         mask = self.merge_labels(mask)
-        return img, mask
-
-
-class TiagerCellsDataset(Dataset):
-    def __init__(self, file_list) -> None:
-        self.files = file_list
-        self.total = len(self.files)
-
-    def __len__(self):
-        return self.total
-
-    def __getitem__(self, index):
-        file_path = self.files[index]
-        img_file = np.load(file_path)
-        img = img_file[:, :, 0:3]
-        mask = img_file[:, :, 3]
+        mask = self.smooth_mask(mask)
         return img, mask, file_path
 
 
 class TrainDataset(Dataset):
-    def __init__(self, subset, do_aug=True):
+    def __init__(self, subset):
         self.subset = subset
-        self.do_aug = do_aug
 
     def imagenet_normalise(self, img):
         mean = np.array([0.485, 0.456, 0.406])
@@ -108,8 +98,7 @@ class TrainDataset(Dataset):
 
     def __getitem__(self, index):
         img, mask, file_path = self.subset[index]
-        if self.do_aug:
-            img, mask = augmentation(img, mask)
+        img, mask = augmentation(img, mask)
 
         mask = mask[:, :, np.newaxis]
         img = img / 255
@@ -117,7 +106,7 @@ class TrainDataset(Dataset):
 
         img = np.moveaxis(img, 2, 0)
         mask = np.moveaxis(mask, 2, 0)
-        return {"img": img, "mask": mask, "file_name": file_path}
+        return {"img": img, "mask": mask}
 
     def __len__(self):
         return len(self.subset)
@@ -143,10 +132,33 @@ class TestDataset(Dataset):
 
         img = np.moveaxis(img, 2, 0)
         mask = np.moveaxis(mask, 2, 0)
-        return {"img": img, "mask": mask, "file_name": file_path}
+        return {"img": img, "mask": mask}
 
     def __len__(self):
         return len(self.subset)
+
+
+class TiagerCellsDataset(Dataset):
+    def __init__(self, file_list) -> None:
+        self.files = file_list
+        self.total = len(self.files)
+
+    def __len__(self):
+        return self.total
+
+    def erode_cell_mask(self, mask):
+        "Reduce mask size of a single cell from 49 to 29 px"
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        mask = cv2.erode(mask, kernel, iterations=1)
+        return mask
+
+    def __getitem__(self, index):
+        file_path = self.files[index]
+        img_file = np.load(file_path)
+        img = img_file[:, :, 0:3]
+        mask = img_file[:, :, 3]
+        # mask = self.erode_cell_mask(mask)
+        return img, mask, file_path
 
 
 def get_cell_dataloaders(patch_folder, fold_num, batch_size=32, phase="Train"):
@@ -207,7 +219,7 @@ def get_cell_dataloaders(patch_folder, fold_num, batch_size=32, phase="Train"):
 
     else:
         train_set = TiagerCellsDataset(train_files)
-        train_set = TrainDataset(train_set, do_aug=False)
+        train_set = TrainDataset(train_set)
         train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 
         test_set = TiagerCellsDataset(test_files)

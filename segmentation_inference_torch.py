@@ -11,18 +11,10 @@ from torchvision.transforms.v2.functional import resize
 from tqdm.auto import tqdm
 
 from config import Challenge_Config, Config
-from utils import (
-    calc_ratio,
-    collate_fn,
-    convert_tissue_masks_for_l1,
-    dist_to_px,
-    get_bulk,
-    get_mask_with_asap,
-    get_mpp_from_level,
-    get_seg_models,
-    imagenet_normalise,
-    is_l1,
-)
+from utils import (calc_ratio, collate_fn, convert_tissue_masks_for_l1,
+                   dist_to_px, get_bulk, get_mask_with_asap,
+                   get_mpp_from_level, get_seg_models, imagenet_normalise,
+                   is_l1)
 
 
 def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):

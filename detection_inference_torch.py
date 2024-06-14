@@ -15,16 +15,9 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from config import Challenge_Config, Config
-from utils import (
-    check_coord_in_mask,
-    collate_fn,
-    get_det_models,
-    get_mask_with_asap,
-    get_mpp_from_level,
-    imagenet_normalise,
-    is_l1,
-    px_to_mm,
-)
+from utils import (check_coord_in_mask, collate_fn, get_det_models,
+                   get_mask_with_asap, get_mpp_from_level, imagenet_normalise,
+                   is_l1, px_to_mm)
 
 
 def detections_in_tile(image_tile, det_models):
