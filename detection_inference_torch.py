@@ -70,7 +70,7 @@ def tile_detection_stats(predictions, coordinate_list, x, y, mpp, tissue_mask=No
         tile_prediction = SemanticSegmentor.merge_prediction(
             (1024, 1024), predictions, coordinate_list
         )
-    threshold = 0.99
+    threshold = 0.5
     tile_prediction_mask = tile_prediction > threshold
 
     mask_label = skimage.measure.label(tile_prediction_mask)
@@ -268,8 +268,9 @@ if __name__ == "__main__":
     #             desc="Multiprocessing Progress",
     #         )
     #     )
-
-    wsi_name = "104S.tif"
-    mask_name = "104S_tissue.tif"
     IOConfig = Challenge_Config()
+    wsi_name = [x for x in os.listdir(IOConfig.input_dir) if x.endswith(".tif")][0]
+    mask_name = [x for x in os.listdir(IOConfig.input_mask_dir) if x.endswith(".tif")][
+        0
+    ]
     detection_process_l1(wsi_name, mask_name, IOConfig)

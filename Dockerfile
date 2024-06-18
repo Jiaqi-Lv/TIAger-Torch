@@ -50,7 +50,7 @@ RUN pip install --no-cache-dir tiatoolbox
 RUN pip install --no-cache-dir segmentation-models-pytorch
 
 # install wholeslidedata
-RUN pip install git+https://github.com/DIAGNijmegen/pathology-whole-slide-data@main
+RUN pip install git+https://github.com/DIAGNijmegen/pathology-whole-slide-data@6e12013a912222f3c55232a63bc8139cdbd5010d
 
 # activate virtual environment
 ENV VIRTUAL_ENV=/opt/venv

@@ -49,34 +49,42 @@ def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):
         imgs = imagenet_normalise(imgs)
         imgs = imgs.to("cuda").float()
 
-        val_predicts = np.zeros(shape=(imgs.size()[0], 3, 256, 256), dtype=np.float32)
+        # val_predicts = np.zeros(shape=(imgs.size()[0], 3, 256, 256), dtype=np.float32)
+        tumor_map = np.zeros((imgs.size()[0], 512, 512), dtype=np.uint8)
+        stroma_map = np.zeros((imgs.size()[0], 512, 512), dtype=np.uint8)
+
+        val_predicts = torch.zeros(
+            size=(imgs.size()[0], 3, 512, 512),
+            device="cuda",
+            dtype=float,
+        )
         with torch.no_grad():
             for seg_model in models:
                 temp_out = seg_model(imgs)
                 temp_out = torch.nn.functional.softmax(temp_out, dim=1)
-                temp_out = resize(temp_out, (256, 256), antialias=False)
-                temp_out = temp_out.detach().cpu().numpy()
-
                 val_predicts += temp_out
+
+            val_predicts = val_predicts / 3
+            val_predicts = val_predicts.detach().cpu().numpy()
 
         pred = np.argmax(val_predicts, axis=1, keepdims=True)
         pred = pred[:, 0, :, :].astype(np.uint8)
-        tumor_map = np.zeros((imgs.size()[0], 256, 256), dtype=np.uint8)
-        stroma_map = np.zeros((imgs.size()[0], 256, 256), dtype=np.uint8)
-        # 1 -> tumor, 2-> stroma
+
         tumor_map[np.where(pred == 1)] = 1
         stroma_map[np.where(pred == 2)] = 1
 
-        tumor_predictions.extend(list(tumor_map))
-        stroma_predictions.extend(list(stroma_map))
+        for i in range(0, imgs.size()[0]):
+            down_tumor_map = cv2.resize(
+                tumor_map[i], (256, 256), interpolation=cv2.INTER_NEAREST
+            ).astype("uint8")
+            down_stroma_map = cv2.resize(
+                stroma_map[i],
+                (256, 256),
+                interpolation=cv2.INTER_NEAREST,
+            ).astype("uint8")
 
-    for i in range(len(tumor_predictions)):
-        tumor_predictions[i] = cv2.morphologyEx(
-            tumor_predictions[i], cv2.MORPH_OPEN, np.ones((10, 10))
-        )
-        stroma_predictions[i] = cv2.morphologyEx(
-            stroma_predictions[i], cv2.MORPH_OPEN, np.ones((10, 10))
-        )
+            tumor_predictions.append(down_tumor_map)
+            stroma_predictions.append(down_stroma_map)
 
     _mpp = get_mpp_from_level(wsi_path, 2)  # mpp at level 2 == 5x power
     down_dimensions = image.slide_dimensions(resolution=_mpp, units="mpp")
@@ -95,9 +103,10 @@ def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):
             tumor_predictions,
             down_coords,
         )
-        tumor_mask = (tumor_mask > 0.5).astype(np.uint8)
+        tumor_mask = (tumor_mask > 0).astype(np.uint8)
+        tumor_mask = cv2.morphologyEx(tumor_mask, cv2.MORPH_OPEN, np.ones((5, 5)))
     out_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_tumor.npy")
-    np.save(out_path, tumor_mask[:, :, 0])
+    np.save(out_path, tumor_mask)
     print(f"tumor mask saved at {out_path}")
 
     print("Merging stroma masks")
@@ -111,9 +120,10 @@ def tumor_stroma_segmentation(wsi_path, mask, models, IOConfig):
             stroma_predictions,
             down_coords,
         )
-        stroma_mask = (stroma_mask > 0.5).astype(np.uint8)
+        stroma_mask = (stroma_mask > 0).astype(np.uint8)
+        stroma_mask = cv2.morphologyEx(stroma_mask, cv2.MORPH_OPEN, np.ones((5, 5)))
     out_path = os.path.join(temp_out_dir, f"{wsi_without_ext}_stroma.npy")
-    np.save(out_path, stroma_mask[:, :, 0])
+    np.save(out_path, stroma_mask)
     print(f"stroma mask saved at {out_path}")
 
     print(f"{wsi_without_ext} tumor stroma segmentation complete")

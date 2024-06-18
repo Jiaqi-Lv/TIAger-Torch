@@ -229,7 +229,7 @@ def get_seg_models(IOConfig):
     tissue_model_dir = IOConfig.tissue_model_dir
 
     segModel1 = os.path.join(tissue_model_dir, "tissue_1.pth")
-    segModel2 = os.path.join(tissue_model_dir, "tissue_3.pth")
+    segModel2 = os.path.join(tissue_model_dir, "tissue_2.pth")
     segModel3 = os.path.join(tissue_model_dir, "tissue_4.pth")
     segModel = [segModel1, segModel2, segModel3]
 
@@ -253,8 +253,8 @@ def get_seg_models(IOConfig):
 def get_det_models(IOConfig):
     cell_model_dir = IOConfig.cell_model_dir
     detModel1 = os.path.join(cell_model_dir, "cell_1.pth")
-    detModel2 = os.path.join(cell_model_dir, "cell_2.pth")
-    detModel3 = os.path.join(cell_model_dir, "cell_3.pth")
+    detModel2 = os.path.join(cell_model_dir, "cell_4.pth")
+    detModel3 = os.path.join(cell_model_dir, "cell_5.pth")
     detModel = [detModel1, detModel2, detModel3]
 
     models: list[torch.nn.Module] = []
@@ -437,8 +437,8 @@ def convert_tissue_masks_for_l1(
     stroma_mask = np.load(stroma_mask_path)
 
     combined_mask = np.zeros_like(tumor_mask)
-    combined_mask[np.where(tumor_mask == 1)] = 1
-    combined_mask[np.where(stroma_mask == 1)] = 2
+    combined_mask[np.where(tumor_mask > 0)] = 1
+    combined_mask[np.where(stroma_mask > 0)] = 2
     combined_mask = combined_mask.astype(np.uint8)
 
     if not (combined_mask.shape == mask.shape):

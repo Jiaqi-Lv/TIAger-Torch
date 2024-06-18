@@ -20,8 +20,8 @@ class Config:
         # self.create_dirs()
 
         self.model_dir = model_dir
-        self.cell_model_dir = os.path.join(self.model_dir, "cell/weights")
-        self.tissue_model_dir = os.path.join(self.model_dir, "tissue/weights")
+        self.cell_model_dir = os.path.join(self.model_dir, "cell/weights_v2")
+        self.tissue_model_dir = os.path.join(self.model_dir, "tissue/weights_v2")
 
     def create_dirs(self):
         if not os.path.exists(self.temp_out_dir):
@@ -55,8 +55,8 @@ class Challenge_Config:
         # self.create_dirs()
 
         self.model_dir = model_dir
-        self.cell_model_dir = os.path.join(self.model_dir, "cell/weights")
-        self.tissue_model_dir = os.path.join(self.model_dir, "tissue/weights")
+        self.cell_model_dir = os.path.join(self.model_dir, "cell/weights_v2")
+        self.tissue_model_dir = os.path.join(self.model_dir, "tissue/weights_v2")
 
     def create_output_dirs(self):
         if not os.path.exists(self.temp_out_dir):
