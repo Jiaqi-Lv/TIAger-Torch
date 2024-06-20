@@ -1,6 +1,9 @@
+import copy
 import json
 import math
 import os
+import shutil
+import sys
 import xml.etree.ElementTree as ET
 
 import cv2
@@ -15,7 +18,23 @@ from scipy.spatial import Delaunay
 from shapely import Point, Polygon
 from shapely.ops import polygonize, unary_union
 from tiatoolbox.annotation.storage import Annotation, SQLiteStore
+from tiatoolbox.tools.patchextraction import SlidingWindowPatchExtractor
 from tiatoolbox.wsicore.wsireader import WSIReader
+
+sys.path.append("/opt/ASAP/bin")
+from wholeslidedata import WholeSlideImage
+from wholeslidedata.interoperability.asap.backend import \
+    AsapWholeSlideImageBackend
+from wholeslidedata.interoperability.asap.imagewriter import \
+    WholeSlideMonochromeMaskWriter
+
+
+def collate_fn(batch):
+    # Apply the make_writable function to each element in the batch
+    batch = np.asarray(batch)
+    writable_batch = batch.copy()
+    # Convert each element to a tensor
+    return torch.as_tensor(writable_batch, dtype=torch.float)
 
 
 def mm2_to_px(mm2, mpp):
@@ -206,19 +225,21 @@ def imagenet_normalise(img: torch.tensor) -> torch.tensor:
     return img
 
 
-def get_seg_models():
-    segModel1 = "/home/u1910100/GitHub/TIAger-Torch/runs/tissue/fold_1/model_59.pth"
-    segModel2 = "/home/u1910100/GitHub/TIAger-Torch/runs/tissue/fold_3/model_41.pth"
-    segModel3 = "/home/u1910100/GitHub/TIAger-Torch/runs/tissue/fold_4/model_35.pth"
+def get_seg_models(IOConfig):
+    tissue_model_dir = IOConfig.tissue_model_dir
+
+    segModel1 = os.path.join(tissue_model_dir, "tissue_1.pth")
+    segModel2 = os.path.join(tissue_model_dir, "tissue_2.pth")
+    segModel3 = os.path.join(tissue_model_dir, "tissue_4.pth")
     segModel = [segModel1, segModel2, segModel3]
 
     models: list[torch.nn.Module] = []
     for model_path in segModel:
         model = smp.Unet(
-            encoder_name="efficientnet-b0",  # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-            encoder_weights=None,  # use `imagenet` pre-trained weights for encoder initialization
-            in_channels=3,  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
-            classes=3,  # model output channels (number of classes in your dataset)
+            encoder_name="efficientnet-b0",
+            encoder_weights=None,
+            in_channels=3,
+            classes=3,
         )
 
         model.load_state_dict(torch.load(model_path))
@@ -229,19 +250,20 @@ def get_seg_models():
     return models
 
 
-def get_det_models():
-    detModel1 = "/home/u1910100/GitHub/TIAger-Torch/runs/cell/fold_1/model_55.pth"
-    detModel2 = "/home/u1910100/GitHub/TIAger-Torch/runs/cell/fold_2/model_40.pth"
-    detModel3 = "/home/u1910100/GitHub/TIAger-Torch/runs/cell/fold_3/model_30.pth"
+def get_det_models(IOConfig):
+    cell_model_dir = IOConfig.cell_model_dir
+    detModel1 = os.path.join(cell_model_dir, "cell_1.pth")
+    detModel2 = os.path.join(cell_model_dir, "cell_4.pth")
+    detModel3 = os.path.join(cell_model_dir, "cell_5.pth")
     detModel = [detModel1, detModel2, detModel3]
 
     models: list[torch.nn.Module] = []
     for model_path in detModel:
         model = smp.Unet(
-            encoder_name="efficientnet-b0",  # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-            encoder_weights=None,  # use `imagenet` pre-trained weights for encoder initialization
-            in_channels=3,  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
-            classes=1,  # model output channels (number of classes in your dataset)
+            encoder_name="efficientnet-b0",
+            encoder_weights=None,
+            in_channels=3,
+            classes=1,
         )
 
         model.load_state_dict(torch.load(model_path))
@@ -399,3 +421,113 @@ def get_tumor_stroma_mask(bulk_tumor_mask, stroma_mask):
 def is_l1(mask):
     count = np.count_nonzero(mask)
     return count < 50000
+
+
+def convert_tissue_masks_for_l1(
+    mask_path, tumor_mask_path, stroma_mask_path, IOConfig, mpp_info
+):
+    # Read tissue mask at level 2 == 5x power
+    _mpp = get_mpp_from_level(mask_path, 2)  # mpp at level 2 == 5x power
+    mask = get_mask_with_asap(mask_path=mask_path, mpp=_mpp)
+
+    base_dimension = get_slide_base_dimension(mask_path)
+
+    # Masks are at level 2
+    tumor_mask = np.load(tumor_mask_path)
+    stroma_mask = np.load(stroma_mask_path)
+
+    combined_mask = np.zeros_like(tumor_mask)
+    combined_mask[np.where(tumor_mask > 0)] = 1
+    combined_mask[np.where(stroma_mask > 0)] = 2
+    combined_mask = combined_mask.astype(np.uint8)
+
+    if not (combined_mask.shape == mask.shape):
+        combined_mask = cv2.resize(
+            combined_mask,
+            (mask.shape[1], mask.shape[0]),
+            interpolation=cv2.INTER_NEAREST,
+        ).astype("uint8")
+
+    # ValueError: operands could not be broadcast together with shapes (5468,5950) (5468,5949)
+    combined_mask = combined_mask * mask
+
+    patch_size = 256
+    patch_extractor = SlidingWindowPatchExtractor(
+        input_img=combined_mask,
+        patch_size=(patch_size, patch_size),
+        input_mask=mask,
+        within_bound=True,
+    )
+
+    tif_save_path = os.path.join(IOConfig.temp_out_dir, f"segmentation.tif")
+    writer = WholeSlideMonochromeMaskWriter()
+    writer.write(
+        path=tif_save_path,
+        spacing=mpp_info[0],
+        dimensions=(base_dimension[1], base_dimension[0]),
+        tile_shape=(patch_size * 4, patch_size * 4),
+    )
+    for i, patch in enumerate(patch_extractor):
+        try:
+            mask = cv2.resize(
+                patch[:, :, 0],
+                (patch_size * 4, patch_size * 4),
+                interpolation=cv2.INTER_NEAREST,
+            ).astype("uint8")
+            x_start, y_start = (
+                patch_extractor.coordinate_list[i][0],
+                patch_extractor.coordinate_list[i][1],
+            )
+            writer.write_tile(
+                tile=mask, coordinates=(int(x_start) * 4, int(y_start) * 4)
+            )
+        except Exception as error:
+            print(error)
+            continue
+    writer.save()
+
+    final_path = os.path.join(IOConfig.seg_out_dir, f"segmentation.tif")
+    shutil.copyfile(
+        os.path.join(IOConfig.temp_out_dir, f"segmentation.tif"),
+        final_path,
+    )
+    print(f"Segmentation saved at {final_path}")
+
+
+def check_coord_in_mask(x, y, mask):
+    """Checks if a given coordinate is inside the tissue mask
+    Coordinate (x, y)
+    Binary tissue mask at 5x
+    """
+    if mask is None:
+        return True
+
+    try:
+        return mask[int(np.round(y)), int(np.round(x))] == 1
+    except IndexError:
+        return False
+
+
+def get_mask_with_asap(mask_path, mpp):
+    mask_reader = WholeSlideImage(mask_path, backend=AsapWholeSlideImageBackend)
+    mask_thumb = mask_reader.get_slide(spacing=mpp)
+    mask_thumb = mask_thumb.astype(np.uint8)
+    return mask_thumb[:, :, 0]
+
+
+def get_mpp_from_level(wsi_path, level):
+    wsi_reader = WholeSlideImage(wsi_path, backend=AsapWholeSlideImageBackend)
+    try:
+        mpp = wsi_reader.spacings[level]
+    except IndexError:
+        print(f"Downsampling level {level} does not exist")
+        print("Using mpp = 2")
+        mpp = 2
+    return mpp
+
+
+def get_slide_base_dimension(wsi_path):
+    """Returns (width, height)"""
+    wsi_reader = WholeSlideImage(wsi_path, backend=AsapWholeSlideImageBackend)
+    shape = wsi_reader.shapes[0]
+    return (shape[1], shape[0])

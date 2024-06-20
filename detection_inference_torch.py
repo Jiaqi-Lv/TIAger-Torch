@@ -1,7 +1,9 @@
 import json
 import os
+import shutil
 from multiprocessing import Pool
 
+import cv2
 import numpy as np
 import skimage
 import skimage.measure
@@ -9,39 +11,35 @@ import torch
 from tiatoolbox.models.engine.semantic_segmentor import SemanticSegmentor
 from tiatoolbox.tools.patchextraction import get_patch_extractor
 from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
-from tissue_masker_lite import get_mask
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from config import DefaultConfig
-from utils import get_det_models, imagenet_normalise, is_l1, px_to_mm
-
-output_dir = DefaultConfig.output_dir
-wsi_dir = DefaultConfig.wsi_dir
-temp_out_dir = DefaultConfig.temp_out_dir
-seg_out_dir = DefaultConfig.seg_out_dir
-det_out_dir = DefaultConfig.det_out_dir
+from config import Challenge_Config, Config
+from utils import (check_coord_in_mask, collate_fn, get_det_models,
+                   get_mask_with_asap, get_mpp_from_level, imagenet_normalise,
+                   is_l1, px_to_mm)
 
 
 def detections_in_tile(image_tile, det_models):
     patch_size = 128
     stride = 100
-    tile_reader = VirtualWSIReader.open(image_tile, power=20.0, mpp=(0.5, 0.5))
-    print(tile_reader.info.as_dict())
+    tile_reader = VirtualWSIReader.open(image_tile)
 
     patch_extractor = get_patch_extractor(
         input_img=tile_reader,
         method_name="slidingwindow",
         patch_size=(patch_size, patch_size),
         stride=(stride, stride),
-        resolution=20,
-        units="power",
+        resolution=0,
+        units="level",
     )
 
     predictions = []
     batch_size = 32
 
-    dataloader = DataLoader(patch_extractor, batch_size=batch_size, shuffle=False)
+    dataloader = DataLoader(
+        patch_extractor, batch_size=batch_size, shuffle=False, collate_fn=collate_fn
+    )
 
     for i, imgs in enumerate(dataloader):
         imgs = torch.permute(imgs, (0, 3, 1, 2))
@@ -65,11 +63,14 @@ def detections_in_tile(image_tile, det_models):
     return predictions, patch_extractor.coordinate_list
 
 
-def tile_detection_stats(predictions, coordinate_list, x, y):
-    tile_prediction = SemanticSegmentor.merge_prediction(
-        (1024, 1024), predictions, coordinate_list
-    )
-    threshold = 0.99
+def tile_detection_stats(predictions, coordinate_list, x, y, mpp, tissue_mask=None):
+    if len(predictions) == 0:
+        tile_prediction = np.zeros(shape=(1024, 1024), dtype=np.uint8)
+    else:
+        tile_prediction = SemanticSegmentor.merge_prediction(
+            (1024, 1024), predictions, coordinate_list
+        )
+    threshold = 0.5
     tile_prediction_mask = tile_prediction > threshold
 
     mask_label = skimage.measure.label(tile_prediction_mask)
@@ -78,27 +79,36 @@ def tile_detection_stats(predictions, coordinate_list, x, y):
     output_points = []
     annotations = []
     for region in stats:
-        centroid = np.round(region["centroid"]).astype(int)
+        centroid = region["centroid"]
 
         c, r, confidence = (
-            np.round(centroid[1]),
-            np.round(centroid[0]),
+            centroid[1],
+            centroid[0],
             region["mean_intensity"],
         )
 
+        if confidence >= 1.0:
+            confidence = 0.99
+        if confidence <= 0.0:
+            confidence = 0.01
+
         c1 = c + x
         r1 = r + y
-        # prediction_record = {
-        #     "point": [
-        #         float(px_to_mm(c1, 0.5)),
-        #         float(px_to_mm(r1, 0.5)),
-        #         float(0.5009999871253967),
-        #     ],
-        #     "probability": float(confidence),
-        # }
 
-        # output_points.append(prediction_record)
-        annotations.append((int(c1), int(r1)))
+        if not check_coord_in_mask(round(c1 / 4), round(r1 / 4), tissue_mask):
+            continue
+
+        prediction_record = {
+            "point": [
+                float(px_to_mm(c1, mpp[0])),
+                float(px_to_mm(r1, mpp[1])),
+                float(0.5009999871253967),
+            ],
+            "probability": float(confidence),
+        }
+
+        output_points.append(prediction_record)
+        annotations.append((np.round(c1), np.round(r1)))
     return annotations, output_points
 
 
@@ -106,13 +116,6 @@ def detection_process(wsi_name):
     wsi_without_ext = os.path.splitext(wsi_name)[0]
     wsi_path = os.path.join(wsi_dir, wsi_name)
     print(f"Processing {wsi_path}")
-
-    if not os.path.exists(det_out_dir):
-        os.makedirs(det_out_dir)
-    output_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
-    if os.path.exists(output_path):
-        print("Already processed")
-        return 1
 
     mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
     mask = np.load(mask_path)[:, :, 0]
@@ -159,13 +162,11 @@ def detection_process(wsi_name):
             predictions, coordinates, bounding_box[0], bounding_box[1]
         )
         annotations.extend(annotations_tile)
-        # output_dict["points"].extend(output_points_tile)
+        output_dict["points"].extend(output_points_tile)
 
-    # output_path = (
-    #     os.path.join(det_out_dir, f"{wsi_without_ext}.json"
-    # ))
-    # with open(output_path, "w") as fp:
-    #     json.dump(output_dict, fp, indent=4)
+    output_path = os.path.join(det_out_dir, f"{wsi_without_ext}.json")
+    with open(output_path, "w") as fp:
+        json.dump(output_dict, fp, indent=4)
 
     output_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
     with open(output_path, "w") as fp:
@@ -174,13 +175,102 @@ def detection_process(wsi_name):
     print("Detection mask saved")
 
 
-if __name__ == "__main__":
-    wsi_name_list = os.listdir(wsi_dir)
-    with Pool(5) as p:
-        list(
-            tqdm(
-                p.imap(detection_process, wsi_name_list, chunksize=15),
-                total=len(wsi_name_list),
-                desc="Multiprocessing Progress",
-            )
+def detection_process_l1(wsi_name, mask_name, IOConfig):
+    """For TIGER Challenge Leaderboard 1"""
+
+    input_dir = IOConfig.input_dir
+    input_mask_dir = IOConfig.input_mask_dir
+    det_out_dir = IOConfig.det_out_dir
+    temp_out_dir = IOConfig.temp_out_dir
+
+    wsi_without_ext = os.path.splitext(wsi_name)[0]
+    wsi_path = os.path.join(input_dir, wsi_name)
+    print(f"Processing {wsi_path}")
+
+    # Load tissue mask
+    print("Loading tissue mask")
+    mask_path = os.path.join(input_mask_dir, mask_name)
+    # mask_reader = WSIReader.open(mask_path)
+    # input_mask = mask_reader.slide_thumbnail(resolution=5, units="power")[:, :, 0]
+    _mpp = get_mpp_from_level(mask_path, 2)  # mpp at level 2 == 5x power
+    input_mask = get_mask_with_asap(mask_path=mask_path, mpp=_mpp)
+
+    models = get_det_models(IOConfig)
+
+    wsi = WSIReader.open(wsi_path)
+    mpp_info = wsi.info.as_dict()["mpp"]
+
+    toolbox_dim = wsi.slide_dimensions(_mpp, "mpp")
+    input_mask = cv2.resize(
+        input_mask,
+        (toolbox_dim[0], toolbox_dim[1]),
+        interpolation=cv2.INTER_NEAREST,
+    ).astype("uint8")
+
+    tile_extractor = get_patch_extractor(
+        input_img=wsi,
+        method_name="slidingwindow",
+        patch_size=(1024, 1024),
+        resolution=0,
+        units="level",
+        input_mask=input_mask,
+    )
+    # Each tile of size 1024x1024
+    annotations = []
+    output_dict = {
+        "type": "Multiple points",
+        "version": {"major": 1, "minor": 0},
+        "points": [],
+    }
+
+    for i, tile in enumerate(
+        tqdm(tile_extractor, leave=False, desc=f"{wsi_without_ext} progress")
+    ):
+        bounding_box = tile_extractor.coordinate_list[
+            i
+        ]  # (x_start, y_start, x_end, y_end)
+        predictions, coordinates = detections_in_tile(tile, models)
+        annotations_tile, output_points_tile = tile_detection_stats(
+            predictions,
+            coordinates,
+            bounding_box[0],
+            bounding_box[1],
+            mpp_info,
+            input_mask,
         )
+        annotations.extend(annotations_tile)
+        output_dict["points"].extend(output_points_tile)
+
+    with open(
+        os.path.join(temp_out_dir, f"detected-lymphocytes.json"), "w", encoding="utf-8"
+    ) as fp:
+        json.dump(output_dict, fp, ensure_ascii=False, indent=4)
+
+    with open(os.path.join(temp_out_dir, f"{wsi_without_ext}_points.json"), "w") as fp:
+        json.dump(annotations, fp, indent=4)
+
+    final_path = os.path.join(det_out_dir, f"detected-lymphocytes.json")
+    shutil.copyfile(
+        os.path.join(temp_out_dir, f"detected-lymphocytes.json"),
+        final_path,
+    )
+
+    print(f"Detection saved at {final_path}")
+
+
+if __name__ == "__main__":
+    # wsi_name_list = os.listdir(wsi_dir)
+    # with Pool(5) as p:
+    #     list(
+    #         tqdm(
+    #             p.imap(detection_process, wsi_name_list, chunksize=15),
+    #             total=len(wsi_name_list),
+    #             desc="Multiprocessing Progress",
+    #         )
+    #     )
+    IOConfig = Challenge_Config()
+    wsi_name = [x for x in os.listdir(IOConfig.input_dir) if x.endswith(".tif")][0]
+    mask_name = [x for x in os.listdir(IOConfig.input_mask_dir) if x.endswith(".tif")][
+        0
+    ]
+    detection_process_l1(wsi_name, mask_name, IOConfig)

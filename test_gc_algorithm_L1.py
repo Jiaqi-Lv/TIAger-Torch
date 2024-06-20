@@ -1,0 +1,17 @@
+import gcapi  # pip install gcapi
+
+your_algorithm_slug = "tiager_torch"  # <--- CHANGE THIS
+client = gcapi.Client(
+    token="d0f778a402eafa6fd5c11b24e6de9e93d5e302546d4ead39fc70f30e1652efeb"
+)  # <--- CHANGE THIS, more information about the token please see this link: https://grand-challenge.org/documentation/what-can-gc-api-be-used-for/
+
+job = client.run_external_job(
+    algorithm=your_algorithm_slug,
+    inputs={
+        # 104S (from the tils training subset)
+        "generic-medical-image": "https://grand-challenge.org/api/v1/cases/images/18a9e579-34bd-43b7-ac42-61541fb35156/",
+        # 104S_rois (similar rois as expected in L1)
+        "generic-overlay": "https://grand-challenge.org/api/v1/cases/images/e676fdaa-719e-4050-81b7-4724fed69c52/",
+    },
+)
+# More information about gcapi please see this link: https://grand-challenge.org/documentation/grand-challenge-api/
