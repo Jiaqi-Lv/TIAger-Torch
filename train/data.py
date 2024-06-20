@@ -157,7 +157,7 @@ class TiagerCellsDataset(Dataset):
         img_file = np.load(file_path)
         img = img_file[:, :, 0:3]
         mask = img_file[:, :, 3]
-        # mask = self.erode_cell_mask(mask)
+        mask = self.erode_cell_mask(mask)
         return img, mask, file_path
 
 
