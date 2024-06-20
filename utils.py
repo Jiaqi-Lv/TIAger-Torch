@@ -23,10 +23,12 @@ from tiatoolbox.wsicore.wsireader import WSIReader
 
 sys.path.append("/opt/ASAP/bin")
 from wholeslidedata import WholeSlideImage
-from wholeslidedata.interoperability.asap.backend import \
-    AsapWholeSlideImageBackend
-from wholeslidedata.interoperability.asap.imagewriter import \
-    WholeSlideMonochromeMaskWriter
+from wholeslidedata.interoperability.asap.backend import (
+    AsapWholeSlideImageBackend,
+)
+from wholeslidedata.interoperability.asap.imagewriter import (
+    WholeSlideMonochromeMaskWriter,
+)
 
 
 def collate_fn(batch):
@@ -108,7 +110,8 @@ def non_max_suppression_fast(boxes, overlapThresh):
         overlap = (w * h) / area[idxs[:last]]
         # delete all indexes from the index list that have
         idxs = np.delete(
-            idxs, np.concatenate(([last], np.where(overlap > overlapThresh)[0]))
+            idxs,
+            np.concatenate(([last], np.where(overlap > overlapThresh)[0])),
         )
     # return only the bounding boxes that were picked using the
     # integer data type
@@ -137,7 +140,9 @@ def slide_nms(slide_path, cell_points, tile_size):
                 continue
 
             # Convert each point to a 5x5 box
-            boxes = np.array([point_to_box(x[0], x[1], box_size) for x in patch_points])
+            boxes = np.array(
+                [point_to_box(x[0], x[1], box_size) for x in patch_points]
+            )
             nms_boxes = non_max_suppression_fast(boxes, 0.5)
             for box in nms_boxes:
                 center_nms_points.append(get_centerpoints(box, box_size))
@@ -152,7 +157,9 @@ def points_to_annotation_store(points: list):
 
     for coord in points:
         annotation_store.append(
-            Annotation(geometry=Point(coord[0], coord[1]), properties={"class": 1})
+            Annotation(
+                geometry=Point(coord[0], coord[1]), properties={"class": 1}
+            )
         )
 
     return annotation_store
@@ -198,7 +205,9 @@ def create_til_score(wsi_path, cell_points_path, mask):
     else:
         cell_points = points_from_xml(cell_points_path)
 
-    nms_points = slide_nms(slide_path=wsi_path, cell_points=cell_points, tile_size=2048)
+    nms_points = slide_nms(
+        slide_path=wsi_path, cell_points=cell_points, tile_size=2048
+    )
 
     cell_counts = len(nms_points)
     # print(f"TIL counts = {cell_counts}")
@@ -370,16 +379,17 @@ def get_bulk(tumor_seg_mask):
 
     alpha = 0.07
     concave_hull, _ = alpha_shape(points, alpha)
-    if isinstance(concave_hull, shapely.geometry.polygon.Polygon) or isinstance(
-        concave_hull, shapely.geometry.GeometryCollection
-    ):
+    if isinstance(
+        concave_hull, shapely.geometry.polygon.Polygon
+    ) or isinstance(concave_hull, shapely.geometry.GeometryCollection):
         polygons = [concave_hull]
     else:
         polygons = list(concave_hull.geoms)
 
     buffersize = dist_to_px(250, mpp)
     polygons = [
-        geometry.Polygon(list(x.buffer(buffersize).exterior.coords)) for x in polygons
+        geometry.Polygon(list(x.buffer(buffersize).exterior.coords))
+        for x in polygons
     ]
 
     coordinates = []
@@ -509,7 +519,9 @@ def check_coord_in_mask(x, y, mask):
 
 
 def get_mask_with_asap(mask_path, mpp):
-    mask_reader = WholeSlideImage(mask_path, backend=AsapWholeSlideImageBackend)
+    mask_reader = WholeSlideImage(
+        mask_path, backend=AsapWholeSlideImageBackend
+    )
     mask_thumb = mask_reader.get_slide(spacing=mpp)
     mask_thumb = mask_thumb.astype(np.uint8)
     return mask_thumb[:, :, 0]

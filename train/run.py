@@ -11,21 +11,11 @@ from train import train_model
 
 BATCH_SIZE = 8
 
-FOLD_DIR_1 = (
-    "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_1"
-)
-FOLD_DIR_2 = (
-    "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_2"
-)
-FOLD_DIR_3 = (
-    "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_3"
-)
-FOLD_DIR_4 = (
-    "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_4"
-)
-FOLD_DIR_5 = (
-    "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_5"
-)
+FOLD_DIR_1 = "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_1"
+FOLD_DIR_2 = "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_2"
+FOLD_DIR_3 = "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_3"
+FOLD_DIR_4 = "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_4"
+FOLD_DIR_5 = "/home/u1910100/Documents/Tiger_Data/tissue_segmentation/patches/256/fold_5"
 
 test_fold = 1
 SAVE_DIR = f"/home/u1910100/GitHub/TIAger-Torch/runs/tissue_fold_{test_fold}"
@@ -45,7 +35,9 @@ train_dataset = TrainDataset(subsetTrain)
 test_dataset = TestDataset(subsetTest)
 
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-validation_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
+validation_loader = DataLoader(
+    test_dataset, batch_size=BATCH_SIZE, shuffle=True
+)
 
 
 model = smp.Unet(

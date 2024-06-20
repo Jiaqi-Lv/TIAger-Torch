@@ -50,7 +50,10 @@ def train_model(
             for i, vdata in enumerate(
                 tqdm(validation_loader, desc="validation", leave=False)
             ):
-                vimgs, vmasks = vdata["img"].cuda().float(), vdata["mask"].cuda().long()
+                vimgs, vmasks = (
+                    vdata["img"].cuda().float(),
+                    vdata["mask"].cuda().long(),
+                )
                 voutputs = model(vimgs)
                 vloss = loss_fn(voutputs, vmasks)
                 running_vloss += vloss

@@ -19,7 +19,10 @@ def augmentation(img, mask):
                         p=0.75,
                     ),  # .8
                     alb.RGBShift(
-                        r_shift_limit=20, g_shift_limit=20, b_shift_limit=20, p=0.75
+                        r_shift_limit=20,
+                        g_shift_limit=20,
+                        b_shift_limit=20,
+                        p=0.75,
                     ),  # .7
                 ],
                 p=1.0,
@@ -28,7 +31,9 @@ def augmentation(img, mask):
                 [
                     alb.GaussianBlur(blur_limit=(3, 5), p=0.5),
                     alb.Sharpen(alpha=(0.1, 0.3), lightness=(1.0, 1.0), p=0.5),
-                    alb.ImageCompression(quality_lower=30, quality_upper=80, p=0.5),
+                    alb.ImageCompression(
+                        quality_lower=30, quality_upper=80, p=0.5
+                    ),
                 ],
                 p=1.0,
             ),
@@ -202,13 +207,18 @@ def get_cell_dataloaders(patch_folder, fold_num, batch_size=32, phase="Train"):
             sample_weights.append(1 / class_counts[i])
 
         train_sampler = WeightedRandomSampler(
-            weights=sample_weights, num_samples=len(train_files), replacement=True
+            weights=sample_weights,
+            num_samples=len(train_files),
+            replacement=True,
         )
 
         train_set = TiagerCellsDataset(train_files)
         train_set = TrainDataset(train_set)
         train_loader = DataLoader(
-            train_set, batch_size=batch_size, shuffle=False, sampler=train_sampler
+            train_set,
+            batch_size=batch_size,
+            shuffle=False,
+            sampler=train_sampler,
         )
 
         test_set = TiagerCellsDataset(test_files)
@@ -220,7 +230,9 @@ def get_cell_dataloaders(patch_folder, fold_num, batch_size=32, phase="Train"):
     else:
         train_set = TiagerCellsDataset(train_files)
         train_set = TrainDataset(train_set)
-        train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+        train_loader = DataLoader(
+            train_set, batch_size=batch_size, shuffle=True
+        )
 
         test_set = TiagerCellsDataset(test_files)
         test_set = TestDataset(test_set)
@@ -230,7 +242,5 @@ def get_cell_dataloaders(patch_folder, fold_num, batch_size=32, phase="Train"):
 
 
 if __name__ == "__main__":
-    patch_folder = (
-        "/home/u1910100/Documents/Tiger_Data/cell_detection/dilation/patches/128/"
-    )
+    patch_folder = "/home/u1910100/Documents/Tiger_Data/cell_detection/dilation/patches/128/"
     get_cell_dataloaders(patch_folder, 5)

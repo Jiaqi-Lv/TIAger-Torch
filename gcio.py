@@ -12,7 +12,9 @@ from shutil import copy
 GRAND_CHALLENGE_SEGMENTATION_OUTPUT_PATH = Path(
     "/output/images/breast-cancer-segmentation-for-tils/segmentation.tif"
 )
-GRAND_CHALLENGE_DETECTION_OUTPUT_PATH = Path("/output/detected-lymphocytes.json")
+GRAND_CHALLENGE_DETECTION_OUTPUT_PATH = Path(
+    "/output/detected-lymphocytes.json"
+)
 GRAND_CHALLENGE_TILS_SCORE_PATH = Path("/output/til-score.json")
 
 ### Temporary paths
@@ -20,7 +22,9 @@ TMP_FOLDER = Path("/home/user/tmp")
 TMP_SEGMENTATION_OUTPUT_PATH = (
     TMP_FOLDER / GRAND_CHALLENGE_SEGMENTATION_OUTPUT_PATH.name
 )
-TMP_DETECTION_OUTPUT_PATH = TMP_FOLDER / GRAND_CHALLENGE_DETECTION_OUTPUT_PATH.name
+TMP_DETECTION_OUTPUT_PATH = (
+    TMP_FOLDER / GRAND_CHALLENGE_DETECTION_OUTPUT_PATH.name
+)
 TMP_TILS_SCORE_PATH = TMP_FOLDER / GRAND_CHALLENGE_TILS_SCORE_PATH.name
 
 # Grand Challenge folders were input files can be found
@@ -35,8 +39,12 @@ GRAND_CHALLENGE_MASK_SUFFIX = ".tif"
 def initialize_output_folders():
     """This function initialize all output folders for grandchallgenge output as well as tempory folder"""
 
-    GRAND_CHALLENGE_SEGMENTATION_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    GRAND_CHALLENGE_DETECTION_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    GRAND_CHALLENGE_SEGMENTATION_OUTPUT_PATH.parent.mkdir(
+        parents=True, exist_ok=True
+    )
+    GRAND_CHALLENGE_DETECTION_OUTPUT_PATH.parent.mkdir(
+        parents=True, exist_ok=True
+    )
     GRAND_CHALLENGE_TILS_SCORE_PATH.parent.mkdir(parents=True, exist_ok=True)
     TMP_FOLDER.mkdir(parents=True, exist_ok=True)
 
@@ -82,7 +90,9 @@ def copy_data_to_output_folders():
     """Copies all temporary files to the (mandatory) output files/folders"""
 
     # copy segmentation tif to grand challenge
-    copy(TMP_SEGMENTATION_OUTPUT_PATH, GRAND_CHALLENGE_SEGMENTATION_OUTPUT_PATH)
+    copy(
+        TMP_SEGMENTATION_OUTPUT_PATH, GRAND_CHALLENGE_SEGMENTATION_OUTPUT_PATH
+    )
     # copy detections json to grand challenge
     copy(TMP_DETECTION_OUTPUT_PATH, GRAND_CHALLENGE_DETECTION_OUTPUT_PATH)
     # copy tils score json to grand challenge

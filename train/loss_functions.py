@@ -10,5 +10,7 @@ class BCE_Dice_Loss(nn.Module):
 
     def forward(self, inputs, targets, weights):
         dice_loss = self.dice(inputs, targets)
-        bce_loss = nn.functional.binary_cross_entropy(inputs, targets, weight=weights)
+        bce_loss = nn.functional.binary_cross_entropy(
+            inputs, targets, weight=weights
+        )
         return dice_loss + bce_loss
