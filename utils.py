@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import xml.etree.ElementTree as ET
+from typing import Union
 
 import cv2
 import numpy as np
@@ -20,6 +21,14 @@ from shapely.ops import polygonize, unary_union
 from tiatoolbox.annotation.storage import Annotation, SQLiteStore
 from tiatoolbox.tools.patchextraction import SlidingWindowPatchExtractor
 from tiatoolbox.wsicore.wsireader import WSIReader
+
+import logging
+
+if logging.getLogger().hasHandlers():
+    logging.getLogger().handlers.clear()
+from tiatoolbox import logger
+
+from config import Config, Challenge_Config
 
 sys.path.append("/opt/ASAP/bin")
 from wholeslidedata import WholeSlideImage
@@ -210,7 +219,7 @@ def create_til_score(wsi_path, cell_points_path, mask):
     )
 
     cell_counts = len(nms_points)
-    # print(f"TIL counts = {cell_counts}")
+    # logger.info(f"TIL counts = {cell_counts}")
 
     # til_area = dist_to_px(4, 0.5) ** 2
     til_area = dist_to_px(2.3, 0.5) ** 2
@@ -234,7 +243,9 @@ def imagenet_normalise(img: torch.tensor) -> torch.tensor:
     return img
 
 
-def get_seg_models(IOConfig):
+def get_seg_models(
+    IOConfig: Union[Config, Challenge_Config]
+) -> list[torch.nn.Module]:
     tissue_model_dir = IOConfig.tissue_model_dir
 
     segModel1 = os.path.join(tissue_model_dir, "tissue_1.pth")
@@ -316,7 +327,7 @@ def alpha_shape(points, alpha):
         area = math.sqrt(s * (s - a) * (s - b) * (s - c))
         circum_r = a * b * c / (4.0 * area)
         # Here's the radius filter.
-        # print circum_r
+        # logger.info circum_r
         if circum_r < 1 / alpha:
             add_edge(edges, edge_points, coords, ia, ib)
             add_edge(edges, edge_points, coords, ib, ic)
@@ -326,21 +337,21 @@ def alpha_shape(points, alpha):
     return unary_union(triangles), edge_points
 
 
-def calc_ratio(patch):
+def calc_ratio(patch: np.ndarray):
     ratio_patch = patch.copy()
     ratio_patch[ratio_patch > 1] = 1
     counts = np.unique(ratio_patch, return_counts=True)
     try:
         return (100 / counts[1][0]) * counts[1][1]
     except IndexError as ie:
-        print(ie)
-        print("Could not calculate ratio, using 0")
+        logger.info(ie)
+        logger.info("Could not calculate ratio, using 0")
         return 0
 
 
 def get_bulk(tumor_seg_mask):
     ratio = calc_ratio(tumor_seg_mask)
-    print(ratio)
+    logger.info(ratio)
     mpp = 32
     min_size = 1.5
 
@@ -374,7 +385,7 @@ def get_bulk(tumor_seg_mask):
 
     points = np.argwhere(wsi_patch == 1)
     if len(points) == 0:
-        print(f"no hull found")
+        logger.info(f"no hull found")
         return wsi_patch
 
     alpha = 0.07
@@ -400,7 +411,7 @@ def get_bulk(tumor_seg_mask):
         coordinates.append(
             [(int(x[1]), int(x[0])) for x in polygon.boundary.coords[:-1]]
         )
-    print(f"tumor bulk counts {len(coordinates)}")
+    logger.info(f"tumor bulk counts {len(coordinates)}")
 
     dimensions = tumor_seg_mask.shape
     img = Image.new("L", (dimensions[1], dimensions[0]), 0)
@@ -428,7 +439,8 @@ def get_tumor_stroma_mask(bulk_tumor_mask, stroma_mask):
     return tumor_stroma_mask
 
 
-def is_l1(mask):
+def is_l1(mask: np.ndarray):
+    """Mask at 1.25 power"""
     count = np.count_nonzero(mask)
     return count < 50000
 
@@ -492,7 +504,7 @@ def convert_tissue_masks_for_l1(
                 tile=mask, coordinates=(int(x_start) * 4, int(y_start) * 4)
             )
         except Exception as error:
-            print(error)
+            logger.info(error)
             continue
     writer.save()
 
@@ -501,7 +513,7 @@ def convert_tissue_masks_for_l1(
         os.path.join(IOConfig.temp_out_dir, f"segmentation.tif"),
         final_path,
     )
-    print(f"Segmentation saved at {final_path}")
+    logger.info(f"Segmentation saved at {final_path}")
 
 
 def check_coord_in_mask(x, y, mask):
@@ -532,8 +544,8 @@ def get_mpp_from_level(wsi_path, level):
     try:
         mpp = wsi_reader.spacings[level]
     except IndexError:
-        print(f"Downsampling level {level} does not exist")
-        print("Using mpp = 2")
+        logger.info(f"Downsampling level {level} does not exist")
+        logger.info("Using mpp = 2")
         mpp = 2
     return mpp
 
