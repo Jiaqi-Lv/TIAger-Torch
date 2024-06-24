@@ -6,13 +6,19 @@ import numpy as np
 from tiatoolbox.wsicore.wsireader import VirtualWSIReader
 from tqdm.auto import tqdm
 
-from config import Challenge_Config, Config
+from config import Challenge_Config, Default_Config
 from utils import create_til_score, is_l1
 
 
-def til_score_process(wsi_name):
+def til_score_process(wsi_name, IOConfig):
     wsi_without_ext = os.path.splitext(wsi_name)[0]
     print(f"Scoring {wsi_without_ext}")
+
+    det_out_dir = IOConfig.det_out_dir
+    wsi_dir = IOConfig.input_dir
+    seg_out_dir = IOConfig.seg_out_dir
+    output_tils_dir = IOConfig.output_tils_dir
+    input_mask_dir = IOConfig.input_mask_dir
 
     cell_points_path = os.path.join(
         det_out_dir, f"{wsi_without_ext}_points.json"
@@ -26,7 +32,7 @@ def til_score_process(wsi_name):
     tumor_stroma_mask_path = os.path.join(
         seg_out_dir, f"{wsi_without_ext}_stroma_bulk.npy"
     )
-    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
+    mask_path = os.path.join(input_mask_dir, f"{wsi_without_ext}.npy")
 
     tissue_mask = np.load(mask_path)[:, :, 0]
 
@@ -48,6 +54,11 @@ def til_score_process(wsi_name):
 
 
 if __name__ == "__main__":
-    wsi_name_list = os.listdir(wsi_dir)
-    with Pool(10) as p:
-        p.map(til_score_process, wsi_name_list)
+    # wsi_name_list = os.listdir(wsi_dir)
+    # with Pool(10) as p:
+    # p.map(til_score_process, wsi_name_list)
+    wsi_name = "104S.tif"
+    IOConfig = Default_Config()
+    IOConfig.input_dir = "/home/u1910100/Documents/Tiger_Data/testinput"
+    IOConfig.input_mask_dir = "/home/u1910100/Documents/Tiger_Data/masks"
+    til_score_process(wsi_name, IOConfig)

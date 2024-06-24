@@ -16,7 +16,7 @@ if logging.getLogger().hasHandlers():
     logging.getLogger().handlers.clear()
 from tiatoolbox import logger
 
-from config import Challenge_Config, Config
+from config import Challenge_Config, Default_Config
 from utils import (
     calc_ratio,
     collate_fn,
@@ -111,7 +111,7 @@ def tumor_stroma_segmentation(
     wsi_path: str,
     mask: np.ndarray,
     models: list[torch.nn.Module],
-    IOConfig: Union[Config, Challenge_Config],
+    IOConfig: Union[Default_Config, Challenge_Config],
 ) -> None:
     temp_out_dir = IOConfig.temp_out_dir
 
@@ -171,7 +171,7 @@ def tumor_stroma_segmentation(
 
 
 def generate_bulk_tumor_stroma(
-    wsi_without_ext: str, IOConfig: Union[Config, Challenge_Config]
+    wsi_without_ext: str, IOConfig: Union[Default_Config, Challenge_Config]
 ):
     temp_out_dir = IOConfig.temp_out_dir
     seg_out_dir = IOConfig.seg_out_dir
@@ -287,7 +287,7 @@ def tumor_stroma_process_l1(
     return 1
 
 
-def tumor_stroma_process(wsi_name: str, IOConfig: Config):
+def tumor_stroma_process(wsi_name: str, IOConfig: Default_Config):
     input_dir = IOConfig.input_dir
     input_mask_dir = IOConfig.input_mask_dir
     seg_out_dir = IOConfig.seg_out_dir
@@ -338,7 +338,7 @@ if __name__ == "__main__":
     # ][0]
     # tumor_stroma_process_l1(wsi_name, mask_name, IOConfig)
 
-    IOConfig = Config()
+    IOConfig = Default_Config()
     IOConfig.create_output_dirs()
     wsi_name = "TC_S01_P000124_C0001_B101.tif"
     mask_name = "TC_S01_P000124_C0001_B101.npy"

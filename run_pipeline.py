@@ -2,19 +2,16 @@ import os
 
 from tissue_masker_lite import get_mask
 
-from config import DefaultConfig
+from config import Challenge_Config, Default_Config
 from detection_inference_torch import detection_process
 from segmentation_inference_torch import tumor_stroma_process
 from til_score import til_score_process
 
-output_dir = DefaultConfig.output_dir
-wsi_dir = DefaultConfig.wsi_dir
-temp_out_dir = DefaultConfig.temp_out_dir
-seg_out_dir = DefaultConfig.seg_out_dir
-det_out_dir = DefaultConfig.det_out_dir
 
+def generate_til_score(wsi_name, IOConfig):
+    wsi_dir = IOConfig.input_dir
+    input_mask_dir = IOConfig.input_mask_dir
 
-def generate_til_score(wsi_name):
     wsi_without_ext = os.path.splitext(wsi_name)[0]
     wsi_path = os.path.join(wsi_dir, wsi_name)
 
@@ -23,16 +20,27 @@ def generate_til_score(wsi_name):
         return 0
 
     # check if tissue mask exists:
-    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
+    mask_path = os.path.join(input_mask_dir, f"{wsi_without_ext}.npy")
     if not os.path.exists(mask_path):
-        get_mask(wsi_path=wsi_path, save_dir=temp_out_dir, return_mask=False)
+        get_mask(wsi_path=wsi_path, save_dir=input_mask_dir, return_mask=False)
 
-    tumor_stroma_process(wsi_name=wsi_name)
-    detection_process(wsi_name=wsi_name)
-    til_score_process(wsi_name=wsi_name)
+    tumor_stroma_process(wsi_name, IOConfig)
+    detection_process(wsi_name, IOConfig)
+    til_score_process(wsi_name, IOConfig)
     return 1
 
 
 if __name__ == "__main__":
+    IOConfig = Default_Config(
+        input_dir="/home/u1910100/Documents/Tiger_Data/local_testing/images",
+        output_dir="/home/u1910100/Documents/Tiger_Data/local_testing/prediction",
+    )
+    IOConfig.input_mask_dir = (
+        "/home/u1910100/Documents/Tiger_Data/local_testing/masks"
+    )
+    IOConfig.create_output_dirs()
     wsi_name = "104S.tif"
-    generate_til_score(wsi_name=wsi_name)
+    try:
+        generate_til_score(wsi_name, IOConfig)
+    except Exception as e:
+        print(e)

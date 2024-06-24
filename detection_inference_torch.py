@@ -14,7 +14,7 @@ from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from config import Challenge_Config, Config
+from config import Challenge_Config, Default_Config
 from utils import (
     check_coord_in_mask,
     collate_fn,
@@ -49,6 +49,7 @@ def detections_in_tile(image_tile, det_models):
         batch_size=batch_size,
         shuffle=False,
         collate_fn=collate_fn,
+        num_workers=4,
     )
 
     for i, imgs in enumerate(dataloader):
@@ -76,7 +77,7 @@ def detections_in_tile(image_tile, det_models):
 
 
 def tile_detection_stats(
-    predictions, coordinate_list, x, y, mpp, tissue_mask=None
+    predictions, coordinate_list, x, y, mpp=None, tissue_mask=None
 ):
     if len(predictions) == 0:
         tile_prediction = np.zeros(shape=(1024, 1024), dtype=np.uint8)
@@ -86,6 +87,9 @@ def tile_detection_stats(
         )
     threshold = 0.5
     tile_prediction_mask = tile_prediction > threshold
+
+    if mpp is None:
+        mpp = (0.5, 0.5)
 
     mask_label = skimage.measure.label(tile_prediction_mask)
 
@@ -128,12 +132,17 @@ def tile_detection_stats(
     return annotations, output_points
 
 
-def detection_process(wsi_name):
+def detection_process(wsi_name, IOConfig):
+    input_mask_dir = IOConfig.input_mask_dir
+    wsi_dir = IOConfig.input_dir
+    seg_out_dir = IOConfig.seg_out_dir
+    det_out_dir = IOConfig.det_out_dir
+
     wsi_without_ext = os.path.splitext(wsi_name)[0]
     wsi_path = os.path.join(wsi_dir, wsi_name)
     print(f"Processing {wsi_path}")
 
-    mask_path = os.path.join(temp_out_dir, f"{wsi_without_ext}.npy")
+    mask_path = os.path.join(input_mask_dir, f"{wsi_without_ext}.npy")
     mask = np.load(mask_path)[:, :, 0]
 
     if is_l1(mask):
@@ -147,7 +156,7 @@ def detection_process(wsi_name):
         tumor_stroma_mask = np.load(tumor_stroma_mask_path)
         input_mask = tumor_stroma_mask
 
-    models = get_det_models()
+    models = get_det_models(IOConfig)
 
     wsi = WSIReader.open(wsi_path)
 
@@ -180,15 +189,15 @@ def detection_process(wsi_name):
         annotations.extend(annotations_tile)
         output_dict["points"].extend(output_points_tile)
 
-    output_path = os.path.join(det_out_dir, f"{wsi_without_ext}.json")
-    with open(output_path, "w") as fp:
-        json.dump(output_dict, fp, indent=4)
+    # output_path = os.path.join(det_out_dir, f"{wsi_without_ext}.json")
+    # with open(output_path, "w") as fp:
+    #     json.dump(output_dict, fp, indent=4)
 
     output_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
     with open(output_path, "w") as fp:
         json.dump(annotations, fp, indent=4)
 
-    print("Detection mask saved")
+    print("Detection results saved")
 
 
 def detection_process_l1(wsi_name, mask_name, IOConfig):
@@ -288,11 +297,18 @@ if __name__ == "__main__":
     #             desc="Multiprocessing Progress",
     #         )
     #     )
-    IOConfig = Challenge_Config()
-    wsi_name = [
-        x for x in os.listdir(IOConfig.input_dir) if x.endswith(".tif")
-    ][0]
-    mask_name = [
-        x for x in os.listdir(IOConfig.input_mask_dir) if x.endswith(".tif")
-    ][0]
-    detection_process_l1(wsi_name, mask_name, IOConfig)
+    # IOConfig = Challenge_Config()
+    # wsi_name = [
+    #     x for x in os.listdir(IOConfig.input_dir) if x.endswith(".tif")
+    # ][0]
+    # mask_name = [
+    #     x for x in os.listdir(IOConfig.input_mask_dir) if x.endswith(".tif")
+    # ][0]
+    # detection_process_l1(wsi_name, mask_name, IOConfig)
+    IOConfig = Default_Config()
+    IOConfig.input_dir = "/home/u1910100/Documents/Tiger_Data/testinput"
+    IOConfig.input_mask_dir = "/home/u1910100/Documents/Tiger_Data/masks"
+    IOConfig.create_output_dirs()
+    wsi_name = "104S.tif"
+    mask_name = "104S.npy"
+    detection_process(wsi_name=wsi_name, IOConfig=IOConfig)

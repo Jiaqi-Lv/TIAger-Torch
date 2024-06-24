@@ -73,7 +73,7 @@ class BaseConfig:
                 os.makedirs(directory)
 
 
-class Config(BaseConfig):
+class Default_Config(BaseConfig):
     def __init__(
         self,
         input_dir: str = "/media/u1910100/Extreme SSD/data/tiger/wsitils/images",

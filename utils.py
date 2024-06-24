@@ -27,7 +27,7 @@ if logging.getLogger().hasHandlers():
     logging.getLogger().handlers.clear()
 from tiatoolbox import logger
 
-from config import Challenge_Config, Config
+from config import Challenge_Config, Default_Config
 
 sys.path.append("/opt/ASAP/bin")
 from wholeslidedata import WholeSlideImage
@@ -219,7 +219,7 @@ def create_til_score(wsi_path, cell_points_path, mask):
     # logger.info(f"TIL counts = {cell_counts}")
 
     # til_area = dist_to_px(4, 0.5) ** 2
-    til_area = dist_to_px(2.3, 0.5) ** 2
+    til_area = dist_to_px(2, 0.5) ** 2
     tils_area = cell_counts * til_area
 
     stroma_area = get_mask_area(mask)
@@ -241,7 +241,7 @@ def imagenet_normalise(img: torch.tensor) -> torch.tensor:
 
 
 def get_seg_models(
-    IOConfig: Union[Config, Challenge_Config]
+    IOConfig: Union[Default_Config, Challenge_Config]
 ) -> list[torch.nn.Module]:
     tissue_model_dir = IOConfig.tissue_model_dir
 
@@ -552,3 +552,10 @@ def get_slide_base_dimension(wsi_path):
     wsi_reader = WholeSlideImage(wsi_path, backend=AsapWholeSlideImageBackend)
     shape = wsi_reader.shapes[0]
     return (shape[1], shape[0])
+
+
+def read_tcga_mask(mask_path):
+    mask = Image.open(mask_path).convert(mode="L")
+    mask = np.asarray(mask)
+    mask = mask.astype(np.uint8)
+    return mask
