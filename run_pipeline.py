@@ -1,4 +1,5 @@
 import os
+from tqdm.auto import tqdm
 
 from tissue_masker_lite import get_mask
 
@@ -39,8 +40,11 @@ if __name__ == "__main__":
         "/home/u1910100/Documents/Tiger_Data/local_testing/masks"
     )
     IOConfig.create_output_dirs()
-    wsi_name = "104S.tif"
-    try:
-        generate_til_score(wsi_name, IOConfig)
-    except Exception as e:
-        print(e)
+
+    files = os.listdir(IOConfig.input_dir)
+    for wsi_name in tqdm(files, position=0, leave=True):
+        # wsi_name = "104S.tif"
+        try:
+            generate_til_score(wsi_name, IOConfig)
+        except Exception as e:
+            print(e)

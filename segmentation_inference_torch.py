@@ -290,7 +290,6 @@ def tumor_stroma_process_l1(
 def tumor_stroma_process(wsi_name: str, IOConfig: Default_Config):
     input_dir = IOConfig.input_dir
     input_mask_dir = IOConfig.input_mask_dir
-    seg_out_dir = IOConfig.seg_out_dir
 
     wsi_path = os.path.join(input_dir, wsi_name)
     wsi_without_ext = os.path.splitext(wsi_name)[0]
