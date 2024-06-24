@@ -14,7 +14,9 @@ def til_score_process(wsi_name):
     wsi_without_ext = os.path.splitext(wsi_name)[0]
     print(f"Scoring {wsi_without_ext}")
 
-    cell_points_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
+    cell_points_path = os.path.join(
+        det_out_dir, f"{wsi_without_ext}_points.json"
+    )
     wsi_path = os.path.join(wsi_dir, wsi_name)
 
     if not os.path.exists(cell_points_path):
@@ -29,7 +31,9 @@ def til_score_process(wsi_name):
     tissue_mask = np.load(mask_path)[:, :, 0]
 
     if is_l1(tissue_mask):
-        mask_reader = VirtualWSIReader.open(tissue_mask, mpp=8, power=1.25, mode="bool")
+        mask_reader = VirtualWSIReader.open(
+            tissue_mask, mpp=8, power=1.25, mode="bool"
+        )
         mask = mask_reader.slide_thumbnail(resolution=32, units="mpp")[:, :, 0]
     else:
         mask = np.load(tumor_stroma_mask_path)

@@ -15,9 +15,16 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from config import Challenge_Config, Config
-from utils import (check_coord_in_mask, collate_fn, get_det_models,
-                   get_mask_with_asap, get_mpp_from_level, imagenet_normalise,
-                   is_l1, px_to_mm)
+from utils import (
+    check_coord_in_mask,
+    collate_fn,
+    get_det_models,
+    get_mask_with_asap,
+    get_mpp_from_level,
+    imagenet_normalise,
+    is_l1,
+    px_to_mm,
+)
 
 
 def detections_in_tile(image_tile, det_models):
@@ -38,7 +45,10 @@ def detections_in_tile(image_tile, det_models):
     batch_size = 32
 
     dataloader = DataLoader(
-        patch_extractor, batch_size=batch_size, shuffle=False, collate_fn=collate_fn
+        patch_extractor,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=collate_fn,
     )
 
     for i, imgs in enumerate(dataloader):
@@ -47,7 +57,9 @@ def detections_in_tile(image_tile, det_models):
         imgs = imagenet_normalise(imgs)
         imgs = imgs.to("cuda").float()
 
-        val_predicts = np.zeros(shape=(imgs.size()[0], 128, 128), dtype=np.float32)
+        val_predicts = np.zeros(
+            shape=(imgs.size()[0], 128, 128), dtype=np.float32
+        )
 
         with torch.no_grad():
             for det_model in det_models:
@@ -63,7 +75,9 @@ def detections_in_tile(image_tile, det_models):
     return predictions, patch_extractor.coordinate_list
 
 
-def tile_detection_stats(predictions, coordinate_list, x, y, mpp, tissue_mask=None):
+def tile_detection_stats(
+    predictions, coordinate_list, x, y, mpp, tissue_mask=None
+):
     if len(predictions) == 0:
         tile_prediction = np.zeros(shape=(1024, 1024), dtype=np.uint8)
     else:
@@ -75,7 +89,9 @@ def tile_detection_stats(predictions, coordinate_list, x, y, mpp, tissue_mask=No
 
     mask_label = skimage.measure.label(tile_prediction_mask)
 
-    stats = skimage.measure.regionprops(mask_label, intensity_image=tile_prediction)
+    stats = skimage.measure.regionprops(
+        mask_label, intensity_image=tile_prediction
+    )
     output_points = []
     annotations = []
     for region in stats:
@@ -242,11 +258,15 @@ def detection_process_l1(wsi_name, mask_name, IOConfig):
         output_dict["points"].extend(output_points_tile)
 
     with open(
-        os.path.join(temp_out_dir, f"detected-lymphocytes.json"), "w", encoding="utf-8"
+        os.path.join(temp_out_dir, f"detected-lymphocytes.json"),
+        "w",
+        encoding="utf-8",
     ) as fp:
         json.dump(output_dict, fp, ensure_ascii=False, indent=4)
 
-    with open(os.path.join(temp_out_dir, f"{wsi_without_ext}_points.json"), "w") as fp:
+    with open(
+        os.path.join(temp_out_dir, f"{wsi_without_ext}_points.json"), "w"
+    ) as fp:
         json.dump(annotations, fp, indent=4)
 
     final_path = os.path.join(det_out_dir, f"detected-lymphocytes.json")
@@ -269,8 +289,10 @@ if __name__ == "__main__":
     #         )
     #     )
     IOConfig = Challenge_Config()
-    wsi_name = [x for x in os.listdir(IOConfig.input_dir) if x.endswith(".tif")][0]
-    mask_name = [x for x in os.listdir(IOConfig.input_mask_dir) if x.endswith(".tif")][
-        0
-    ]
+    wsi_name = [
+        x for x in os.listdir(IOConfig.input_dir) if x.endswith(".tif")
+    ][0]
+    mask_name = [
+        x for x in os.listdir(IOConfig.input_mask_dir) if x.endswith(".tif")
+    ][0]
     detection_process_l1(wsi_name, mask_name, IOConfig)
