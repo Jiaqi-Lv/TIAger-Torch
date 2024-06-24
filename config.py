@@ -86,7 +86,7 @@ class Config(BaseConfig):
             os.path.join(output_dir, "temp_out/"),
             model_dir,
         )
-        self.input_mask_dir = self.temp_out_dir
+        self.input_mask_dir = "/home/u1910100/Documents/Tiger_Data/masks"
 
 
 class Challenge_Config(BaseConfig):

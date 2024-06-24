@@ -1,4 +1,6 @@
+import logging
 import os
+from typing import Union
 
 import cv2
 import numpy as np
@@ -9,9 +11,6 @@ from tiatoolbox.wsicore.wsireader import WSIReader
 from torch.utils.data import DataLoader
 from torchvision.transforms.v2.functional import resize
 from tqdm.auto import tqdm
-from typing import Union
-
-import logging
 
 if logging.getLogger().hasHandlers():
     logging.getLogger().handlers.clear()
@@ -35,9 +34,10 @@ from utils import (
 def process_patches(
     dataloader: DataLoader, models: list[torch.nn.Module]
 ) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    tumor_predictions: list[np.ndarray]
-    stroma_predictions: list[np.ndarray]
-    tumor_predictions, stroma_predictions = [], []
+    tumor_predictions: list[np.ndarray] = []
+    stroma_predictions: list[np.ndarray] = []
+
+    output_pred: list[np.ndarray] = []
 
     for imgs in tqdm(dataloader, leave=False):
         imgs = torch.permute(imgs, (0, 3, 1, 2))
@@ -45,9 +45,6 @@ def process_patches(
         imgs = imagenet_normalise(imgs)
         imgs = imgs.to("cuda").float()
 
-        tumor_map, stroma_map = np.zeros(
-            (imgs.size()[0], 512, 512), dtype=np.uint8
-        ), np.zeros((imgs.size()[0], 512, 512), dtype=np.uint8)
         val_predicts = torch.zeros(
             size=(imgs.size()[0], 3, 512, 512), device="cuda", dtype=float
         )
@@ -63,9 +60,15 @@ def process_patches(
 
         pred = np.argmax(val_predicts, axis=1, keepdims=True)
         pred = pred[:, 0, :, :].astype(np.uint8)
+        output_pred.append(pred)
 
-        tumor_map[np.where(pred == 1)] = 1
-        stroma_map[np.where(pred == 2)] = 1
+    for batch_output in output_pred:
+        tumor_map = np.zeros((batch_output.shape[0], 512, 512), dtype=np.uint8)
+        stroma_map = np.zeros(
+            (batch_output.shape[0], 512, 512), dtype=np.uint8
+        )
+        tumor_map[np.where(batch_output == 1)] = 1
+        stroma_map[np.where(batch_output == 2)] = 1
 
         for i in range(imgs.size()[0]):
             down_tumor_map = cv2.resize(
@@ -130,12 +133,13 @@ def tumor_stroma_segmentation(
     tumor_predictions: list[np.ndarray] = []
     stroma_predictions: list[np.ndarray] = []
 
-    batch_size = 16
+    batch_size = 32
     dataloader = DataLoader(
         patch_extractor,
         batch_size=batch_size,
         shuffle=False,
         collate_fn=collate_fn,
+        num_workers=0,
     )
 
     tumor_predictions, stroma_predictions = process_patches(dataloader, models)
@@ -169,12 +173,9 @@ def tumor_stroma_segmentation(
 def generate_bulk_tumor_stroma(
     wsi_without_ext: str, IOConfig: Union[Config, Challenge_Config]
 ):
-    output_dir = IOConfig.output_dir
-    input_dir = IOConfig.input_dir
     temp_out_dir = IOConfig.temp_out_dir
     seg_out_dir = IOConfig.seg_out_dir
-    det_out_dir = IOConfig.det_out_dir
-
+    # These masks are saved at 5x
     tumor_mask_path = os.path.join(
         temp_out_dir, f"{wsi_without_ext}_tumor.npy"
     )
@@ -185,8 +186,21 @@ def generate_bulk_tumor_stroma(
         stroma_mask = np.load(stroma_mask_path)
         tumor_mask = np.load(tumor_mask_path)
     except:
-        logger.info("Failed to load tumor mask or stroma mask")
+        logger.warning("Failed to load tumor mask or stroma mask")
         return 0
+
+    # Down-sample masks to 0.3125x
+
+    stroma_mask = cv2.resize(
+        stroma_mask,
+        None,
+        fx=0.0625,
+        fy=0.0625,
+        interpolation=cv2.INTER_NEAREST,
+    ).astype("uint8")
+    tumor_mask = cv2.resize(
+        tumor_mask, None, fx=0.0625, fy=0.0625, interpolation=cv2.INTER_NEAREST
+    ).astype("uint8")
 
     ratio = calc_ratio(tumor_mask)
     if ratio < 0.1:
@@ -299,13 +313,13 @@ def tumor_stroma_process(wsi_name: str, IOConfig: Config):
         logger.info(f"{wsi_without_ext} is L1")
         return 1
     else:
-        models = get_seg_models()
+        models = get_seg_models(IOConfig)
         logger.info("Running tissue segmentation")
-        tumor_stroma_segmentation(wsi_path, mask, models)
+        tumor_stroma_segmentation(wsi_path, mask, models, IOConfig)
 
         # Generate tumor bulk
         logger.info("Generating bulk tumor stroma")
-        generate_bulk_tumor_stroma(wsi_without_ext)
+        generate_bulk_tumor_stroma(wsi_without_ext, IOConfig)
 
         logger.info("Tumor stroma mask saved")
         return 1
@@ -326,6 +340,6 @@ if __name__ == "__main__":
 
     IOConfig = Config()
     IOConfig.create_output_dirs()
-    wsi_name = "104S.tif"
-    mask_name = "104S.npy"
+    wsi_name = "TC_S01_P000124_C0001_B101.tif"
+    mask_name = "TC_S01_P000124_C0001_B101.npy"
     tumor_stroma_process(wsi_name=wsi_name, IOConfig=IOConfig)

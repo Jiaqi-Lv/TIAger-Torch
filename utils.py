@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import math
 import os
 import shutil
@@ -22,19 +23,15 @@ from tiatoolbox.annotation.storage import Annotation, SQLiteStore
 from tiatoolbox.tools.patchextraction import SlidingWindowPatchExtractor
 from tiatoolbox.wsicore.wsireader import WSIReader
 
-import logging
-
 if logging.getLogger().hasHandlers():
     logging.getLogger().handlers.clear()
 from tiatoolbox import logger
 
-from config import Config, Challenge_Config
+from config import Challenge_Config, Config
 
 sys.path.append("/opt/ASAP/bin")
 from wholeslidedata import WholeSlideImage
-from wholeslidedata.interoperability.asap.backend import (
-    AsapWholeSlideImageBackend,
-)
+from wholeslidedata.interoperability.asap.backend import AsapWholeSlideImageBackend
 from wholeslidedata.interoperability.asap.imagewriter import (
     WholeSlideMonochromeMaskWriter,
 )
