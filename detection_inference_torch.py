@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 from multiprocessing import Pool
+import logging
 
 import cv2
 import numpy as np
@@ -13,6 +14,9 @@ from tiatoolbox.tools.patchextraction import get_patch_extractor
 from tiatoolbox.wsicore.wsireader import VirtualWSIReader, WSIReader
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+if logging.getLogger().hasHandlers():
+    logging.getLogger().handlers.clear()
+from tiatoolbox import logger
 
 from config import Challenge_Config, Default_Config
 from utils import (
@@ -85,7 +89,7 @@ def tile_detection_stats(
         tile_prediction = SemanticSegmentor.merge_prediction(
             (1024, 1024), predictions, coordinate_list
         )
-    threshold = 0.5
+    threshold = 0.9
     tile_prediction_mask = tile_prediction > threshold
 
     if mpp is None:
@@ -115,7 +119,7 @@ def tile_detection_stats(
         c1 = c + x
         r1 = r + y
 
-        if not check_coord_in_mask(round(c1 / 4), round(r1 / 4), tissue_mask):
+        if not check_coord_in_mask(round(c1 / 64), round(r1 / 64), tissue_mask):
             continue
 
         prediction_record = {
@@ -142,8 +146,17 @@ def detection_process(wsi_name, IOConfig):
     wsi_path = os.path.join(wsi_dir, wsi_name)
     print(f"Processing {wsi_path}")
 
+    output_path = os.path.join(det_out_dir, f"{wsi_without_ext}_points.json")
+    if os.path.isfile(output_path):
+        logger.info(f"{wsi_without_ext} already processed")
+        return 1
+
     mask_path = os.path.join(input_mask_dir, f"{wsi_without_ext}.npy")
-    mask = np.load(mask_path)[:, :, 0]
+    mask = np.load(mask_path) # at 1.25x
+    # resize to 0.3125x
+    mask = cv2.resize(
+        mask, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_NEAREST
+    ).astype("uint8")
 
     if is_l1(mask):
         print("L1")
@@ -184,7 +197,7 @@ def detection_process(wsi_name, IOConfig):
         ]  # (x_start, y_start, x_end, y_end)
         predictions, coordinates = detections_in_tile(tile, models)
         annotations_tile, output_points_tile = tile_detection_stats(
-            predictions, coordinates, bounding_box[0], bounding_box[1]
+            predictions, coordinates, bounding_box[0], bounding_box[1],tissue_mask=mask
         )
         annotations.extend(annotations_tile)
         output_dict["points"].extend(output_points_tile)

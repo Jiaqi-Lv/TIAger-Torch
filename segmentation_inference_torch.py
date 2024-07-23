@@ -23,8 +23,8 @@ from utils import (
     convert_tissue_masks_for_l1,
     dist_to_px,
     get_bulk,
-    get_mask_with_asap,
-    get_mpp_from_level,
+    # get_mask_with_asap,
+    # get_mpp_from_level,
     get_seg_models,
     imagenet_normalise,
     is_l1,
@@ -70,7 +70,7 @@ def process_patches(
         tumor_map[np.where(batch_output == 1)] = 1
         stroma_map[np.where(batch_output == 2)] = 1
 
-        for i in range(imgs.size()[0]):
+        for i in range(batch_output.shape[0]):
             down_tumor_map = cv2.resize(
                 tumor_map[i], (256, 256), interpolation=cv2.INTER_NEAREST
             ).astype("uint8")
@@ -114,19 +114,29 @@ def tumor_stroma_segmentation(
     IOConfig: Union[Default_Config, Challenge_Config],
 ) -> None:
     temp_out_dir = IOConfig.temp_out_dir
-
     wsi_without_ext = os.path.splitext(os.path.basename(wsi_path))[0]
+    tumor_mask_path = os.path.join(
+        temp_out_dir, f"{wsi_without_ext}_tumor.npy"
+    )
+    stroma_mask_path = os.path.join(
+        temp_out_dir, f"{wsi_without_ext}_stroma.npy"
+    )
+    if os.path.isfile(tumor_mask_path) and os.path.isfile(stroma_mask_path):
+        print(f"{wsi_without_ext} segmentation files exist")
+        return 1
+
+
     image = WSIReader.open(wsi_path)
 
-    _mpp = get_mpp_from_level(wsi_path, 1)  # mpp at level 1 == 10x power
+    # _mpp = get_mpp_from_level(wsi_path, 1)  # mpp at level 1 == 10x power
 
     patch_extractor = get_patch_extractor(
         input_img=image,
         method_name="slidingwindow",
         patch_size=(512, 512),
-        stride=(256, 256),
-        resolution=_mpp,
-        units="mpp",
+        stride=(384, 384),
+        resolution=10,
+        units="power",
         input_mask=mask,
     )
 
@@ -144,8 +154,8 @@ def tumor_stroma_segmentation(
 
     tumor_predictions, stroma_predictions = process_patches(dataloader, models)
 
-    _mpp = get_mpp_from_level(wsi_path, 2)  # mpp at level 2 == 5x power
-    down_dimensions = image.slide_dimensions(resolution=_mpp, units="mpp")
+    # _mpp = get_mpp_from_level(wsi_path, 2)  # mpp at level 2 == 5x power
+    down_dimensions = image.slide_dimensions(resolution=5, units="power")
     down_coords = patch_extractor.coordinate_list / 2
     down_coords = np.round(down_coords).astype(int)
 
@@ -290,23 +300,24 @@ def tumor_stroma_process_l1(
 def tumor_stroma_process(wsi_name: str, IOConfig: Default_Config):
     input_dir = IOConfig.input_dir
     input_mask_dir = IOConfig.input_mask_dir
+    seg_out_dir = IOConfig.seg_out_dir
 
     wsi_path = os.path.join(input_dir, wsi_name)
     wsi_without_ext = os.path.splitext(wsi_name)[0]
 
     logger.info(f"Processing {wsi_without_ext}")
 
-    # seg_result_path = os.path.join(
-    #     seg_out_dir, f"{wsi_without_ext}_tumor_stroma.npy"
-    # )
-    # if os.path.isfile(seg_result_path):
-    #     logger.info(f"{wsi_without_ext} already processed")
-    #     return 1
+    seg_result_path = os.path.join(
+        seg_out_dir, f"{wsi_without_ext}_bulk.npy"
+    )
+    if os.path.isfile(seg_result_path):
+        logger.info(f"{wsi_without_ext} already processed")
+        return 1
 
     # Generate tissue mask
     logger.info("Loading tissue mask")
     mask_path = os.path.join(input_mask_dir, f"{wsi_without_ext}.npy")
-    mask = np.load(mask_path)[:, :, 0]
+    mask = np.load(mask_path)
 
     if is_l1(mask):
         logger.info(f"{wsi_without_ext} is L1")

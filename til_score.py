@@ -20,6 +20,11 @@ def til_score_process(wsi_name, IOConfig):
     output_tils_dir = IOConfig.output_tils_dir
     input_mask_dir = IOConfig.input_mask_dir
 
+    output_tils_path = os.path.join(output_tils_dir, f"{wsi_without_ext}.txt")
+    if os.path.isfile(output_tils_path):
+        print(f"{wsi_without_ext} already processed")
+        return 1
+
     cell_points_path = os.path.join(
         det_out_dir, f"{wsi_without_ext}_points.json"
     )
@@ -34,7 +39,7 @@ def til_score_process(wsi_name, IOConfig):
     )
     mask_path = os.path.join(input_mask_dir, f"{wsi_without_ext}.npy")
 
-    tissue_mask = np.load(mask_path)[:, :, 0]
+    tissue_mask = np.load(mask_path)
 
     if is_l1(tissue_mask):
         mask_reader = VirtualWSIReader.open(
@@ -46,7 +51,7 @@ def til_score_process(wsi_name, IOConfig):
 
     score = create_til_score(wsi_path, cell_points_path, mask)
 
-    output_tils_path = os.path.join(output_tils_dir, f"{wsi_without_ext}.txt")
+    
     with open(output_tils_path, "w") as file:
         file.write(str(score))
     print(f"{wsi_without_ext} TIL score saved")

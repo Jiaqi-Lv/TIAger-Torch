@@ -70,7 +70,7 @@ class BaseConfig:
         ]:
             if not os.path.exists(directory):
                 print(f"creating dir: {directory}")
-                os.makedirs(directory)
+                os.makedirs(directory, exist_ok=True)
 
 
 class Default_Config(BaseConfig):
@@ -103,3 +103,15 @@ class Challenge_Config(BaseConfig):
         )
         self.det_out_dir = output_dir
         self.output_tils_dir = output_dir
+
+
+class DGX_Config(BaseConfig):
+    def __init__(
+        self,
+        input_dir: str = "/home/u1910100/web-public/tcga",
+        output_dir: str = "/home/u1910100/cloud_workspace/data/tiager/tcga_brca",
+        temp_out_dir: str = "/home/u1910100/cloud_workspace/data/tiager/tcga_brca/tempoutput",
+        model_dir: Optional[str] = DEFAULT_MODEL_DIR,
+    ) -> None:
+        super().__init__(input_dir, output_dir, temp_out_dir, model_dir)
+        self.input_mask_dir = "/home/u1910100/cloud_workspace/data/tiager/tcga_brca/masks"

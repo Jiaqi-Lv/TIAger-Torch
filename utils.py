@@ -29,12 +29,12 @@ from tiatoolbox import logger
 
 from config import Challenge_Config, Default_Config
 
-sys.path.append("/opt/ASAP/bin")
-from wholeslidedata import WholeSlideImage
-from wholeslidedata.interoperability.asap.backend import AsapWholeSlideImageBackend
-from wholeslidedata.interoperability.asap.imagewriter import (
-    WholeSlideMonochromeMaskWriter,
-)
+# sys.path.append("/opt/ASAP/bin")
+# from wholeslidedata import WholeSlideImage
+# from wholeslidedata.interoperability.asap.backend import AsapWholeSlideImageBackend
+# from wholeslidedata.interoperability.asap.imagewriter import (
+#     WholeSlideMonochromeMaskWriter,
+# )
 
 
 def collate_fn(batch):
@@ -219,13 +219,16 @@ def create_til_score(wsi_path, cell_points_path, mask):
     # logger.info(f"TIL counts = {cell_counts}")
 
     # til_area = dist_to_px(4, 0.5) ** 2
-    til_area = dist_to_px(2, 0.5) ** 2
+    til_area = dist_to_px(1, 0.5) ** 2 * math.pi
     tils_area = cell_counts * til_area
 
     stroma_area = get_mask_area(mask)
-    tilscore = int((100 / int(stroma_area)) * int(tils_area))
-    tilscore = min(99, tilscore)
-    tilscore = max(1, tilscore)
+    if stroma_area != 0:
+        tilscore = int(np.round((100 / stroma_area) * (tils_area)))
+        tilscore = min(99, tilscore)
+        tilscore = max(1, tilscore)
+    else:
+        tilscore = 1
     return tilscore
 
 
@@ -362,7 +365,7 @@ def get_bulk(tumor_seg_mask):
     binary_tumor_mask = tumor_seg_mask.astype(bool)
 
     wsi_patch = skimage.morphology.remove_small_objects(
-        binary_tumor_mask, min_size=mm2_to_px(0.005, mpp), connectivity=2
+        binary_tumor_mask, min_size=mm2_to_px(0.002, mpp), connectivity=2
     )
     wsi_patch = wsi_patch.astype(np.uint8)
 
@@ -516,7 +519,7 @@ def convert_tissue_masks_for_l1(
 def check_coord_in_mask(x, y, mask):
     """Checks if a given coordinate is inside the tissue mask
     Coordinate (x, y)
-    Binary tissue mask at 5x
+    Binary tissue mask at 1.25x
     """
     if mask is None:
         return True
